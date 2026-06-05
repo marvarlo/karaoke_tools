@@ -234,6 +234,20 @@
 La primera vez que uses un modelo, tomará unos minutos en descargarse automáticamente.</pre>
                     </div>
 
+                    <!-- EDITOR DE LETRAS Y TIMINGS (NUEVO) -->
+                    <div id="lyrics-editor-card" class="glass-panel" style="display:none; text-align: left; margin-top: 30px; padding: 25px;">
+                        <div class="map-header" style="margin-bottom: 20px;">
+                            <div>
+                                <h2>✏️ Editor de Letras y Timings Corregidos</h2>
+                                <p class="step-desc" style="margin-bottom: 0;">Corrige la ortografía, borra alucinaciones (como segmentos "y" repetidos) y afina tiempos por palabra en segundos.</p>
+                            </div>
+                            <button class="glow-button success" onclick="saveLyricsData()">💾 Guardar Letra y Tiempos</button>
+                        </div>
+                        <div id="lyrics-editor-list" class="lyrics-editor-list" style="max-height: 450px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; padding-right: 8px;">
+                            <!-- Inyectado por JS -->
+                        </div>
+                    </div>
+
                     <div class="actions-footer">
                         <button class="glow-button secondary" onclick="prevStep()">← Atrás</button>
                         <button class="glow-button primary" id="step2-next" disabled onclick="nextStep()">Siguiente Paso →</button>

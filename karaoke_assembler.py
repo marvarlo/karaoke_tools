@@ -73,6 +73,12 @@ PALETA VISUAL (MINIMAL)
 """
 
 import sys, re, json, shutil, subprocess, tempfile, time, argparse
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List

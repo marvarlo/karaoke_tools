@@ -364,6 +364,21 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_error_json(f"Error al leer map.json: {str(e)}")
 
+        elif path == '/api/words':
+            project_name = query.get('project', [''])[0]
+            if not project_name:
+                return self.send_error_json("Falta el parámetro 'project'")
+            
+            words_file = WORKSPACE_DIR / project_name / 'output' / 'words.json'
+            if not words_file.exists():
+                return self.send_error_json("La transcripción no existe aún.")
+            
+            try:
+                words_data = json.loads(words_file.read_text(encoding='utf-8'))
+                return self.send_json(words_data)
+            except Exception as e:
+                return self.send_error_json(f"Error al leer words.json: {str(e)}")
+
         elif path == '/api/status':
             project_name = query.get('project', [''])[0]
             if not project_name:

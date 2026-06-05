@@ -5,6 +5,7 @@ let projectConfig = null;
 let projectStatus = null;
 let projectImages = [];
 let mapData = null;
+let lyricsData = null;
 let selectedStyle = "minimal";
 let statusInterval = null;
 let systemFonts = [];
@@ -160,6 +161,14 @@ async function handleProjectChange(projectName) {
         
         // Cargar miniaturas y mapa
         updateImagesGallery();
+        
+        // Cargar editor de letras si ya está transcribido
+        if (projectStatus.words_json_exists) {
+            document.getElementById('lyrics-editor-card').style.display = 'block';
+            loadLyricsEditor();
+        } else {
+            document.getElementById('lyrics-editor-card').style.display = 'none';
+        }
         
         // Activar/desactivar pasos del Wizard según el progreso real del proyecto
         updateStepAccess();
@@ -773,5 +782,242 @@ function updateVideoPlayer() {
         player.style.display = 'none';
         placeholder.style.display = 'flex';
         actionsBox.style.display = 'none';
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// EDITOR DE LETRAS Y TIMINGS (PASO 2)
+// ──────────────────────────────────────────────────────────────────────────────
+async function loadLyricsEditor() {
+    if (!currentProject) return;
+    try {
+        const res = await fetch(`/api/words?project=${currentProject}`);
+        if (!res.ok) return;
+        lyricsData = await res.json();
+        renderLyricsEditor();
+    } catch (e) {
+        console.error("Error al cargar words.json:", e);
+        showToast("Error al cargar la letra del proyecto", "error");
+    }
+}
+
+function renderLyricsEditor() {
+    const container = document.getElementById('lyrics-editor-list');
+    container.innerHTML = '';
+    
+    if (!lyricsData || !lyricsData.segments || lyricsData.segments.length === 0) {
+        container.innerHTML = '<div class="gallery-empty-message">No hay letra disponible para editar.</div>';
+        return;
+    }
+    
+    lyricsData.segments.forEach((seg, segIdx) => {
+        const segBox = document.createElement('div');
+        segBox.className = 'segment-editor-box';
+        segBox.dataset.index = segIdx;
+        
+        // Header del segmento
+        const header = document.createElement('div');
+        header.className = 'segment-editor-header';
+        
+        const title = document.createElement('h4');
+        const startTime = seg.start !== undefined ? parseFloat(seg.start).toFixed(2) : '0.00';
+        const endTime = seg.end !== undefined ? parseFloat(seg.end).toFixed(2) : '0.00';
+        title.innerText = `Segmento ${segIdx + 1} (${startTime}s - ${endTime}s)`;
+        
+        const deleteSegBtn = document.createElement('button');
+        deleteSegBtn.className = 'delete-segment-btn';
+        deleteSegBtn.innerText = '🗑️ Eliminar';
+        deleteSegBtn.onclick = () => deleteSegment(segIdx);
+        
+        header.appendChild(title);
+        header.appendChild(deleteSegBtn);
+        
+        // Contenedor de palabras
+        const wordsContainer = document.createElement('div');
+        wordsContainer.className = 'words-edit-container';
+        
+        // Renderizar palabras
+        const wordsList = seg.words || [];
+        wordsList.forEach((w, wIdx) => {
+            const wordCard = document.createElement('div');
+            wordCard.className = 'word-edit-card';
+            
+            // Botón eliminar palabra
+            const delWordBtn = document.createElement('span');
+            delWordBtn.className = 'word-delete-btn';
+            delWordBtn.innerHTML = '&times;';
+            delWordBtn.onclick = () => deleteWord(segIdx, wIdx);
+            
+            // Input texto de palabra
+            const wordInput = document.createElement('input');
+            wordInput.type = 'text';
+            wordInput.className = 'word-text';
+            wordInput.value = w.word;
+            wordInput.placeholder = 'Palabra';
+            wordInput.oninput = (e) => {
+                w.word = e.target.value;
+                updateSegmentFullText(segIdx);
+            };
+            
+            // Contenedor de tiempos
+            const timesDiv = document.createElement('div');
+            timesDiv.className = 'word-edit-times';
+            
+            // Input start
+            const startDiv = document.createElement('div');
+            startDiv.className = 'timing-field-mini';
+            startDiv.innerHTML = `<label>Ini</label>`;
+            const startInput = document.createElement('input');
+            startInput.type = 'number';
+            startInput.step = '0.01';
+            startInput.value = w.start;
+            startInput.oninput = (e) => {
+                w.start = parseFloat(e.target.value) || 0.0;
+                updateSegmentTimesFromWords(segIdx);
+            };
+            startDiv.appendChild(startInput);
+            
+            // Input end
+            const endDiv = document.createElement('div');
+            endDiv.className = 'timing-field-mini';
+            endDiv.innerHTML = `<label>Fin</label>`;
+            const endInput = document.createElement('input');
+            endInput.type = 'number';
+            endInput.step = '0.01';
+            endInput.value = w.end;
+            endInput.oninput = (e) => {
+                w.end = parseFloat(e.target.value) || 0.0;
+                updateSegmentTimesFromWords(segIdx);
+            };
+            endDiv.appendChild(endInput);
+            
+            timesDiv.appendChild(startDiv);
+            timesDiv.appendChild(endDiv);
+            
+            wordCard.appendChild(delWordBtn);
+            wordCard.appendChild(wordInput);
+            wordCard.appendChild(timesDiv);
+            
+            wordsContainer.appendChild(wordCard);
+        });
+        
+        // Botón añadir palabra
+        const addWordBtn = document.createElement('button');
+        addWordBtn.className = 'add-word-btn-mini';
+        addWordBtn.innerHTML = '➕ Añadir';
+        addWordBtn.onclick = () => addWordToSegment(segIdx);
+        
+        wordsContainer.appendChild(addWordBtn);
+        
+        segBox.appendChild(header);
+        segBox.appendChild(wordsContainer);
+        
+        container.appendChild(segBox);
+    });
+}
+
+function updateSegmentFullText(segIdx) {
+    const seg = lyricsData.segments[segIdx];
+    if (!seg) return;
+    seg.text = (seg.words || []).map(w => w.word).join(' ');
+}
+
+function updateSegmentTimesFromWords(segIdx) {
+    const seg = lyricsData.segments[segIdx];
+    if (!seg || !seg.words || seg.words.length === 0) return;
+    
+    // El inicio del segmento es el inicio de su primera palabra
+    seg.start = seg.words[0].start;
+    // El fin del segmento es el fin de su última palabra
+    seg.end = seg.words[seg.words.length - 1].end;
+    
+    // Actualizar visualmente el título del segmento en el DOM
+    const segBox = document.querySelector(`.segment-editor-box[data-index="${segIdx}"]`);
+    if (segBox) {
+        const title = segBox.querySelector('.segment-editor-header h4');
+        if (title) {
+            title.innerText = `Segmento ${segIdx + 1} (${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s)`;
+        }
+    }
+}
+
+function deleteSegment(segIdx) {
+    if (!lyricsData || !lyricsData.segments) return;
+    if (confirm(`¿Estás seguro de que deseas eliminar por completo el segmento ${segIdx + 1}?`)) {
+        lyricsData.segments.splice(segIdx, 1);
+        // Re-indexar los IDs de segmentos para que sean continuos
+        lyricsData.segments.forEach((seg, idx) => {
+            seg.id = idx;
+        });
+        renderLyricsEditor();
+    }
+}
+
+function deleteWord(segIdx, wIdx) {
+    if (!lyricsData || !lyricsData.segments[segIdx]) return;
+    const seg = lyricsData.segments[segIdx];
+    seg.words.splice(wIdx, 1);
+    
+    // Actualizar texto y tiempos del segmento
+    updateSegmentFullText(segIdx);
+    updateSegmentTimesFromWords(segIdx);
+    
+    renderLyricsEditor();
+}
+
+function addWordToSegment(segIdx) {
+    if (!lyricsData || !lyricsData.segments[segIdx]) return;
+    const seg = lyricsData.segments[segIdx];
+    if (!seg.words) seg.words = [];
+    
+    // Determinar tiempos razonables por defecto para la nueva palabra
+    let newStart = 0.0;
+    let newEnd = 1.0;
+    if (seg.words.length > 0) {
+        const lastWord = seg.words[seg.words.length - 1];
+        newStart = lastWord.end;
+        newEnd = lastWord.end + 0.5; // +500ms
+    } else {
+        newStart = seg.start || 0.0;
+        newEnd = (seg.start || 0.0) + 1.0;
+    }
+    
+    seg.words.push({
+        word: "Nueva",
+        start: parseFloat(newStart.toFixed(3)),
+        end: parseFloat(newEnd.toFixed(3)),
+        confidence: 1.0
+    });
+    
+    updateSegmentFullText(segIdx);
+    updateSegmentTimesFromWords(segIdx);
+    
+    renderLyricsEditor();
+}
+
+async function saveLyricsData() {
+    if (!currentProject || !lyricsData) return;
+    
+    try {
+        showToast("Guardando cambios de letras...", "warning");
+        const res = await fetch('/api/save_words', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project: currentProject,
+                segments: lyricsData.segments
+            })
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            showToast(data.error, "error");
+        } else {
+            showToast("¡Letras y timings guardados correctamente!");
+            // Recargar info del proyecto
+            handleProjectChange(currentProject);
+        }
+    } catch (e) {
+        showToast("Error al guardar letras", "error");
     }
 }

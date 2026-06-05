@@ -951,3 +951,166 @@ h3 {
 .toast.warning {
     border-left: 4px solid var(--accent-gold);
 }
+
+/* LYRICS & WORD EDITOR (Paso 2) */
+.segment-editor-box {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.segment-editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.segment-editor-header h4 {
+    font-size: 0.9rem;
+    color: var(--accent-gold);
+}
+
+.delete-segment-btn {
+    background: rgba(255, 74, 74, 0.1);
+    border: 1px solid rgba(255, 74, 74, 0.3);
+    color: var(--error-red);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-speed);
+}
+
+.delete-segment-btn:hover {
+    background: rgba(255, 74, 74, 0.25);
+    color: #ff6b6b;
+}
+
+.words-edit-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.word-edit-card {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 105px;
+    position: relative;
+    transition: var(--transition-speed);
+}
+
+.word-edit-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.word-edit-card input.word-text {
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    padding: 2px 0;
+    outline: none;
+    width: 100%;
+}
+
+.word-edit-card input.word-text:focus {
+    border-color: var(--primary-neon);
+}
+
+.word-edit-times {
+    display: flex;
+    gap: 4px;
+}
+
+.word-edit-times .timing-field-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 50%;
+}
+
+.word-edit-times label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.word-edit-times input {
+    width: 100%;
+    font-size: 0.72rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    color: var(--text-main);
+    padding: 2px 0;
+    outline: none;
+}
+
+.word-edit-times input:focus {
+    border-color: var(--accent-gold);
+}
+
+.word-delete-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 74, 74, 0.15);
+    border: 1px solid rgba(255, 74, 74, 0.4);
+    color: var(--error-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: var(--transition-speed);
+}
+
+.word-delete-btn:hover {
+    background: var(--error-red);
+    color: #fff;
+    box-shadow: 0 0 6px rgba(255, 74, 74, 0.4);
+}
+
+.add-word-btn-mini {
+    background: rgba(0, 255, 180, 0.08);
+    border: 1px solid rgba(0, 255, 180, 0.3);
+    color: var(--primary-neon);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-speed);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.add-word-btn-mini:hover {
+    background: rgba(0, 255, 180, 0.2);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(0, 255, 180, 0.2);
+}
+
