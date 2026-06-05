@@ -141,7 +141,12 @@
                     </div>
 
                     <div class="glass-card side-info">
-                        <h3>Configuración del Estilo</h3>
+                        <div class="style-title-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin-bottom: 0;">Configuración del Estilo</h3>
+                            <button type="button" id="open-palette-btn" class="glass-button-mini neon-border-btn" style="padding: 5px 10px; font-size: 13px; display: flex; align-items: center; gap: 5px;">
+                                🎨 Palette <span class="badge-mini-new" style="background: #00ffb4; color: #000; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; line-height: 1;">New</span>
+                            </button>
+                        </div>
                         <p class="sidebar-info">Elige el estilo visual que servirá como base para los textos y fondos del video.</p>
                         
                         <div class="style-selector-grid">
@@ -409,6 +414,38 @@ La primera vez que uses un modelo, tomará unos minutos en descargarse automáti
 
     <!-- NOTIFICACIONES TOAST -->
     <div id="toast" class="toast"></div>
+
+    <!-- MODAL DE PALETAS DE COLORES -->
+    <div id="palette-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content color-palette-modal glass-panel">
+            <div class="modal-header">
+                <h3>Color Palette</h3>
+                <span class="close-modal" id="close-palette-modal">&times;</span>
+            </div>
+            
+            <div class="modal-tabs">
+                <div class="modal-tab active" data-tab="all-palettes">All Palettes</div>
+                <div class="modal-tab" data-tab="my-palettes" style="opacity: 0.5; cursor: not-allowed;" title="Próximamente: Crear paletas personalizadas">My Palettes</div>
+            </div>
+            
+            <div class="modal-body">
+                <div class="palette-grid-container">
+                    <div class="my-palettes-section" style="margin-bottom: 5px;">
+                        <div class="new-palette-card" style="width: 220px; height: 110px; cursor: not-allowed; opacity: 0.5;" title="Próximamente: Crear paletas personalizadas">
+                            <span style="font-size: 20px; font-weight: bold; color: var(--text-muted); margin-bottom: 5px;">+</span>
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text-muted);">New Palette</span>
+                        </div>
+                    </div>
+                    
+                    <div class="recommended-title" style="color: #888899; font-size: 14px; font-weight: 500; margin-top: 10px; margin-bottom: 5px;">Recommended</div>
+                    
+                    <div class="palette-list-grid" id="palette-list-grid">
+                        <!-- Carga dinámica de paletas -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

@@ -7,6 +7,7 @@ let projectImages = [];
 let mapData = null;
 let lyricsData = null;
 let selectedStyle = "minimal";
+let currentPaletteName = "default";
 let statusInterval = null;
 let systemFonts = [];
 
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAspectChangeHandler();
     setupSyncHandlers();
     updateFontPreview();
+    setupPaletteHandlers();
 });
 
 // MOSTRAR TOAST NOTIFICACIONES
@@ -69,19 +71,31 @@ function updateFontPreview() {
     const fontSizeInput = document.getElementById('font-size-preview');
     const previewBox = document.getElementById('lyric-preview-box');
 
+    if (!fontSelect || !fontSizeInput || !previewBox) return;
+
     const selectedFont = fontSelect.value;
     const fontSize = fontSizeInput.value;
+    let appliedFontFamily = selectedFont;
 
     // Aplicar estilos a la caja de previsualización
-    // Si es una ruta (de font de sistema), usamos el nombre de la fuente o fallback serif
+    // Si es una ruta (de font de sistema/proyecto), inyectamos la regla @font-face y usamos el nombre de la fuente
     if (selectedFont.includes('/') || selectedFont.includes('\\')) {
-        // Extraer nombre del archivo sin extensión
         const parts = selectedFont.split(/[/\\]/);
         const fontName = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
-        // Creamos una regla @font-face temporal o simplemente aplicamos serif
-        // En navegadores web locales no siempre podemos cargar archivos .ttf directamente de disco local
-        // por políticas de seguridad, pero para previsualización, si es Georgia/Cambria/Times lo muestra perfecto.
-        // Si es una fuente personalizada, usamos serif como fallback visual de tamaño.
+        appliedFontFamily = fontName;
+        
+        let fontFaceId = `font-face-${fontName}`;
+        if (!document.getElementById(fontFaceId)) {
+            const style = document.createElement('style');
+            style.id = fontFaceId;
+            style.textContent = `
+                @font-face {
+                    font-family: "${fontName}";
+                    src: url('/api/font_file?path=${encodeURIComponent(selectedFont)}');
+                }
+            `;
+            document.head.appendChild(style);
+        }
         previewBox.style.fontFamily = `"${fontName}", serif`;
     } else {
         previewBox.style.fontFamily = selectedFont;
@@ -91,6 +105,47 @@ function updateFontPreview() {
     const activePrev = previewBox.querySelector('.active-prev');
     if (activePrev) {
         activePrev.style.fontSize = `${fontSize}px`;
+    }
+
+    // También aplicar al texto de las tarjetas de estilo en "Configuración del Estilo"
+    const stylePreviewTexts = document.querySelectorAll('.style-card .preview-text');
+    stylePreviewTexts.forEach(el => {
+        if (selectedFont.includes('/') || selectedFont.includes('\\')) {
+            el.style.fontFamily = `"${appliedFontFamily}", serif`;
+        } else {
+            el.style.fontFamily = selectedFont;
+        }
+    });
+
+    // Guardar en config del proyecto si está cargado
+    if (projectConfig && currentProject) {
+        let isChanged = false;
+        if (projectConfig.font !== selectedFont) {
+            projectConfig.font = selectedFont;
+            isChanged = true;
+        }
+        const parsedSize = parseInt(fontSize) || 72;
+        if (projectConfig.font_size !== parsedSize) {
+            projectConfig.font_size = parsedSize;
+            isChanged = true;
+        }
+
+        if (isChanged) {
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project: currentProject,
+                    config: projectConfig
+                })
+            }).catch(e => console.error("Error al guardar fuente en config:", e));
+            
+            // Sincronizar el input de tamaño del Paso 5
+            const renderFontSizeInput = document.getElementById('render-font-size');
+            if (renderFontSizeInput && renderFontSizeInput.value !== fontSize) {
+                renderFontSizeInput.value = fontSize;
+            }
+        }
     }
 }
 
@@ -196,20 +251,37 @@ async function handleProjectChange(projectName) {
         document.getElementById('p-mode').value = projectConfig.mode || "karaoke";
         document.getElementById('p-whisper').value = projectConfig.whisper_model || "medium";
 
-        // Estilo visual
+        // Estilo visual y paleta de colores
+        currentPaletteName = projectConfig.selected_palette || "default";
         selectedStyle = projectConfig.style || "minimal";
-        document.querySelectorAll('.style-card').forEach(card => {
-            if (card.dataset.style === selectedStyle) {
-                card.classList.add('active');
-            } else {
-                card.classList.remove('active');
-            }
-        });
 
-        // Configuración de render en el paso 5
+        // Aplicar paleta en las tarjetas y botón
+        applyPaletteUI(currentPaletteName);
+
+        // Seleccionar el estilo activo
+        const activeCard = document.querySelector(`.style-card[data-style="${selectedStyle}"]`);
+        if (activeCard) {
+            selectStyle(activeCard);
+        }
+
+        // Configuración de render en el paso 5 e inicialización de fuentes en el paso 1
         document.getElementById('render-mode').value = projectConfig.mode || "karaoke";
         document.getElementById('render-style').value = selectedStyle;
-        document.getElementById('render-font-size').value = projectConfig.font_size || 72;
+        
+        const fSize = projectConfig.font_size || 72;
+        document.getElementById('render-font-size').value = fSize;
+        
+        const fontSizePreview = document.getElementById('font-size-preview');
+        if (fontSizePreview) {
+            fontSizePreview.value = fSize;
+        }
+        
+        const fontSelectPreview = document.getElementById('font-select-preview');
+        if (fontSelectPreview) {
+            fontSelectPreview.value = projectConfig.font || "georgia";
+        }
+        
+        updateFontPreview();
 
         // Cargar miniaturas y mapa
         updateImagesGallery();
@@ -337,14 +409,7 @@ function selectStyle(element) {
     }
 
     // Cambiar estilo de la previsualización de fuentes también
-    const stylePalette = {
-        'minimal': { active: '#C8903A', sung: '#F4EFE6', unsung: '#464646', bg: 'linear-gradient(135deg, #111 0%, #222 100%)' },
-        'dark': { active: '#FFCD5A', sung: '#D7D7C3', unsung: '#373737', bg: 'linear-gradient(135deg, #050505 0%, #151515 100%)' },
-        'neon': { active: '#00FFB4', sung: '#AFAFFF', unsung: '#414141', bg: 'linear-gradient(135deg, #000 0%, #080a10 100%)' },
-        'vintage': { active: '#FFD77D', sung: '#F0DAB6', unsung: '#5f553e', bg: 'linear-gradient(135deg, #2a221a 0%, #3d3428 100%)' }
-    };
-
-    const palette = stylePalette[selectedStyle];
+    const palette = colorPalettes[currentPaletteName].styles[selectedStyle];
     const previewBox = document.getElementById('lyric-preview-box');
     previewBox.style.background = palette.bg;
 
@@ -355,6 +420,21 @@ function selectStyle(element) {
     if (sungWord) sungWord.style.color = palette.sung;
     if (actWord) actWord.style.color = palette.active;
     if (unsungWord) unsungWord.style.color = palette.unsung;
+
+    // Guardar en config del proyecto si está cargado
+    if (projectConfig && currentProject) {
+        projectConfig.style = selectedStyle;
+        projectConfig.custom_colors = palette.python;
+
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project: currentProject,
+                config: projectConfig
+            })
+        }).catch(e => console.error("Error al guardar estilo en config:", e));
+    }
 }
 
 async function handleInitProject(event) {
@@ -378,6 +458,11 @@ async function handleInitProject(event) {
     formData.append('mode', mode);
     formData.append('style', selectedStyle);
     formData.append('whisper_model', whisper_model);
+
+    const font = document.getElementById('font-select-preview').value;
+    const font_size = document.getElementById('font-size-preview').value;
+    formData.append('font', font);
+    formData.append('font_size', font_size);
 
     // Verificar si se seleccionó archivo de audio
     if (audioInput.files.length > 0) {
@@ -803,6 +888,19 @@ function setupSyncHandlers() {
             if (styleCard) {
                 selectStyle(styleCard);
             }
+        });
+    }
+
+    const renderFontSize = document.getElementById('render-font-size');
+    const fontSizePreview = document.getElementById('font-size-preview');
+    if (renderFontSize && fontSizePreview) {
+        renderFontSize.addEventListener('input', (e) => {
+            fontSizePreview.value = e.target.value;
+            updateFontPreview();
+        });
+        fontSizePreview.addEventListener('input', (e) => {
+            renderFontSize.value = e.target.value;
+            updateFontPreview();
         });
     }
 }
@@ -1358,5 +1456,248 @@ function applyMetadata(title, artist, filename) {
         artistInput.value = artist;
     } else {
         artistInput.value = "";
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PALETAS DE COLORES DINÁMICAS (NUEVO)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// DATABASE DE PALETAS DE COLORES
+const colorPalettes = {
+    "default": {
+        "name": "Default",
+        "headerBg": "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
+        "image": "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?q=80&w=400",
+        "colors": ["#C8903A", "#F4EFE6", "#464646", "#00FFB4", "#AFAFFF", "#111111"],
+        "styles": {
+            "minimal": { active: '#C8903A', sung: '#F4EFE6', unsung: '#464646', bg: 'linear-gradient(135deg, #111 0%, #222 100%)', python: { active: [200,144,58], sung: [244,239,230], unsung: [70,70,70], adj: [45,42,38], bg: 0.68, overlay: 110 } },
+            "dark": { active: '#FFCD5A', sung: '#D7D7C3', unsung: '#373737', bg: 'linear-gradient(135deg, #050505 0%, #151515 100%)', python: { active: [255,205,90], sung: [215,215,195], unsung: [55,55,55], adj: [28,28,28], bg: 0.48, overlay: 165 } },
+            "neon": { active: '#00FFB4', sung: '#AFAFFF', unsung: '#414141', bg: 'linear-gradient(135deg, #000 0%, #080a10 100%)', python: { active: [0,255,180], sung: [175,175,255], unsung: [65,65,65], adj: [30,30,30], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#FFD77D', sung: '#F0DAB6', unsung: '#5f553e', bg: 'linear-gradient(135deg, #2a221a 0%, #3d3428 100%)', python: { active: [255,215,125], sung: [240,218,182], unsung: [95,85,62], adj: [55,50,38], bg: 0.65, overlay: 125 } }
+        }
+    },
+    "blues": {
+        "name": "Blues",
+        "headerBg": "linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%)",
+        "image": "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=400",
+        "colors": ["#CBEBF6", "#3FA9F5", "#1B75BC", "#114D80", "#1E2A5C", "#0A0E29"],
+        "styles": {
+            "minimal": { active: '#00D2FF', sung: '#FFFFFF', unsung: '#4A5F70', bg: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', python: { active: [0,210,255], sung: [255,255,255], unsung: [74,95,112], adj: [30,40,50], bg: 0.65, overlay: 110 } },
+            "dark": { active: '#3B82F6', sung: '#93C5FD', unsung: '#1E3A8A', bg: 'linear-gradient(135deg, #020617 0%, #0F172A 100%)', python: { active: [59,130,246], sung: [147,197,253], unsung: [30,58,138], adj: [10,20,40], bg: 0.45, overlay: 165 } },
+            "neon": { active: '#00F2FE', sung: '#4FACFE', unsung: '#1E293B', bg: 'linear-gradient(135deg, #0B132B 0%, #1C2541 100%)', python: { active: [0,242,254], sung: [79,172,254], unsung: [30,41,59], adj: [15,20,35], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#60A5FA', sung: '#DBEAFE', unsung: '#3B82F6', bg: 'linear-gradient(135deg, #172554 0%, #1e3a8a 100%)', python: { active: [96,165,250], sung: [219,234,254], unsung: [59,130,246], adj: [40,50,80], bg: 0.60, overlay: 125 } }
+        }
+    },
+    "passion": {
+        "name": "Passion",
+        "headerBg": "linear-gradient(135deg, #7c2d12 0%, #dc2626 100%)",
+        "image": "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?q=80&w=400",
+        "colors": ["#ff7e40", "#ea580c", "#dc2626", "#991b1b", "#450a0a", "#0c0a09"],
+        "styles": {
+            "minimal": { active: '#F97316', sung: '#FFF7ED', unsung: '#7C2D12', bg: 'linear-gradient(135deg, #1C1917 0%, #292524 100%)', python: { active: [249,115,22], sung: [255,247,237], unsung: [124,45,18], adj: [60,30,20], bg: 0.65, overlay: 110 } },
+            "dark": { active: '#EF4444', sung: '#FEE2E2', unsung: '#450A0A', bg: 'linear-gradient(135deg, #0C0A09 0%, #1C1917 100%)', python: { active: [239,68,68], sung: [254,226,226], unsung: [69,10,10], adj: [30,10,10], bg: 0.45, overlay: 165 } },
+            "neon": { active: '#FF0055', sung: '#FFAA00', unsung: '#500000', bg: 'linear-gradient(135deg, #0A0003 0%, #1A0008 100%)', python: { active: [255,0,85], sung: [255,170,0], unsung: [80,0,0], adj: [35,0,5], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#EA580C', sung: '#FFEDD5', unsung: '#7C2D12', bg: 'linear-gradient(135deg, #451a03 0%, #7c2d12 100%)', python: { active: [234,88,12], sung: [255,237,213], unsung: [124,45,18], adj: [80,30,20], bg: 0.60, overlay: 125 } }
+        }
+    },
+    "memory": {
+        "name": "Memory",
+        "headerBg": "linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%)",
+        "image": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=400",
+        "colors": ["#eef2ff", "#ffedd5", "#fed7aa", "#c7d2fe", "#b45309", "#1e1b4b"],
+        "styles": {
+            "minimal": { active: '#A78BFA', sung: '#F5F3FF', unsung: '#4C1D95', bg: 'linear-gradient(135deg, #18181B 0%, #27272A 100%)', python: { active: [167,139,250], sung: [245,243,255], unsung: [76,29,149], adj: [40,20,60], bg: 0.65, overlay: 110 } },
+            "dark": { active: '#C084FC', sung: '#E9D5FF', unsung: '#581C87', bg: 'linear-gradient(135deg, #090514 0%, #181124 100%)', python: { active: [192,132,252], sung: [233,213,255], unsung: [88,28,135], adj: [30,10,50], bg: 0.45, overlay: 165 } },
+            "neon": { active: '#D8B4FE', sung: '#F3E8FF', unsung: '#581C87', bg: 'linear-gradient(135deg, #120E1E 0%, #1A122C 100%)', python: { active: [216,180,254], sung: [243,232,255], unsung: [88,28,135], adj: [40,20,60], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#F472B6', sung: '#FCE7F3', unsung: '#9D174D', bg: 'linear-gradient(135deg, #4a044e 0%, #701a75 100%)', python: { active: [244,114,182], sung: [252,231,243], unsung: [157,23,77], adj: [80,20,60], bg: 0.60, overlay: 125 } }
+        }
+    },
+    "acid": {
+        "name": "Acid",
+        "headerBg": "linear-gradient(135deg, #1e293b 0%, #10b981 100%)",
+        "image": "https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=400",
+        "colors": ["#a3e635", "#06b6d4", "#3b82f6", "#22c55e", "#ec4899", "#311042"],
+        "styles": {
+            "minimal": { active: '#39FF14', sung: '#FFFFFF', unsung: '#1F4D12', bg: 'linear-gradient(135deg, #050A02 0%, #0E1A04 100%)', python: { active: [57,255,20], sung: [255,255,255], unsung: [31,77,18], adj: [10,30,5], bg: 0.65, overlay: 110 } },
+            "dark": { active: '#CCFF00', sung: '#E2E2E2', unsung: '#3A4400', bg: 'linear-gradient(135deg, #0D1000 0%, #1D2200 100%)', python: { active: [204,255,0], sung: [226,226,226], unsung: [58,68,0], adj: [20,25,0], bg: 0.45, overlay: 165 } },
+            "neon": { active: '#00FF00', sung: '#FF00FF', unsung: '#330033', bg: 'linear-gradient(135deg, #000000 0%, #0D0D0D 100%)', python: { active: [0,255,0], sung: [255,0,255], unsung: [51,0,51], adj: [10,0,10], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#8B5CF6', sung: '#DDD6FE', unsung: '#4C1D95', bg: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', python: { active: [139,92,246], sung: [221,214,254], unsung: [76,29,149], adj: [30,10,70], bg: 0.60, overlay: 125 } }
+        }
+    },
+    "macaron": {
+        "name": "Macaron",
+        "headerBg": "linear-gradient(135deg, #fbcfe8 0%, #ccfbf1 100%)",
+        "image": "https://images.unsplash.com/photo-1569864358642-9d1684040f43?q=80&w=400",
+        "colors": ["#fbcfe8", "#fde047", "#a7f3d0", "#fed7aa", "#bfdbfe", "#f472b6"],
+        "styles": {
+            "minimal": { active: '#FFB7B2', sung: '#FFFFFC', unsung: '#E8AEB7', bg: 'linear-gradient(135deg, #1C1921 0%, #2A2730 100%)', python: { active: [255,183,178], sung: [255,255,252], unsung: [232,174,183], adj: [50,40,50], bg: 0.65, overlay: 110 } },
+            "dark": { active: '#FFD166', sung: '#F7FFF7', unsung: '#06D6A0', bg: 'linear-gradient(135deg, #070F15 0%, #122030 100%)', python: { active: [255,209,102], sung: [247,255,247], unsung: [6,214,160], adj: [5,30,40], bg: 0.45, overlay: 165 } },
+            "neon": { active: '#F72585', sung: '#4CC9F0', unsung: '#3F37C9', bg: 'linear-gradient(135deg, #10002B 0%, #240046 100%)', python: { active: [247,37,133], sung: [76,201,240], unsung: [63,55,201], adj: [20,10,50], bg: 0.35, overlay: 185 } },
+            "vintage": { active: '#E9C46A', sung: '#F4A261', unsung: '#264653', bg: 'linear-gradient(135deg, #2E3D44 0%, #1D262B 100%)', python: { active: [233,196,106], sung: [244,162,97], unsung: [38,70,83], adj: [40,50,60], bg: 0.60, overlay: 125 } }
+        }
+    }
+};
+
+function setupPaletteHandlers() {
+    const openBtn = document.getElementById('open-palette-btn');
+    const closeBtn = document.getElementById('close-palette-modal');
+    const modal = document.getElementById('palette-modal');
+    
+    if (openBtn) {
+        openBtn.addEventListener('click', () => {
+            renderPaletteCards();
+            modal.style.display = 'flex';
+        });
+    }
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+    
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+}
+
+function applyPaletteUI(pKey) {
+    if (!colorPalettes[pKey]) pKey = "default";
+    currentPaletteName = pKey;
+    
+    const stylesData = colorPalettes[pKey].styles;
+    document.querySelectorAll('.style-card').forEach(card => {
+        const styleName = card.dataset.style;
+        const cfg = stylesData[styleName];
+        if (!cfg) return;
+        
+        const preview = card.querySelector('.style-preview');
+        if (preview) {
+            preview.style.background = cfg.bg;
+            preview.style.borderColor = cfg.active;
+            
+            const pText = preview.querySelector('.preview-text');
+            if (pText) {
+                pText.style.color = cfg.sung;
+                const actSpan = pText.querySelector('span');
+                if (actSpan) {
+                    actSpan.style.color = cfg.active;
+                }
+            }
+        }
+        
+        const labelSpan = card.querySelector('span');
+        if (labelSpan) {
+            const styleCap = styleName.charAt(0).toUpperCase() + styleName.slice(1);
+            labelSpan.innerText = `${styleCap} (${colorPalettes[pKey].name})`;
+        }
+    });
+    
+    const openBtn = document.getElementById('open-palette-btn');
+    if (openBtn) {
+        const primaryColor = colorPalettes[pKey].colors[0];
+        openBtn.style.color = primaryColor;
+        openBtn.style.borderColor = primaryColor;
+        openBtn.style.boxShadow = `0 0 10px ${primaryColor}40`;
+    }
+}
+
+function renderPaletteCards() {
+    const grid = document.getElementById('palette-list-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    
+    // Cargar dinámicamente las paletas recomendadas
+    Object.keys(colorPalettes).forEach(pKey => {
+        const pal = colorPalettes[pKey];
+        const isSelected = currentPaletteName === pKey;
+        
+        const card = document.createElement('div');
+        card.className = `palette-card ${isSelected ? 'selected' : ''}`;
+        card.onclick = () => selectPalette(pKey);
+        
+        if (isSelected) {
+            const primaryColor = pal.colors[0];
+            card.style.borderColor = primaryColor;
+            card.style.boxShadow = `0 0 15px ${primaryColor}60`;
+        }
+        
+        // Cabecera visual (imagen con fallback de gradiente)
+        const vHeader = document.createElement('div');
+        vHeader.className = 'palette-visual-header';
+        if (pal.image) {
+            vHeader.style.background = `url('${pal.image}') center/cover no-repeat, ${pal.headerBg}`;
+        } else {
+            vHeader.style.background = pal.headerBg;
+        }
+        
+        // Franja de colores
+        const colorStrip = document.createElement('div');
+        colorStrip.className = 'palette-color-strip';
+        
+        pal.colors.forEach(col => {
+            const block = document.createElement('div');
+            block.className = 'palette-color-block';
+            block.style.backgroundColor = col;
+            colorStrip.appendChild(block);
+        });
+        
+        // Nombre superpuesto
+        const nameOverlay = document.createElement('div');
+        nameOverlay.className = 'palette-name-overlay';
+        nameOverlay.innerText = pal.name;
+        colorStrip.appendChild(nameOverlay);
+        
+        card.appendChild(vHeader);
+        card.appendChild(colorStrip);
+        grid.appendChild(card);
+    });
+}
+
+async function selectPalette(pKey) {
+    if (!colorPalettes[pKey]) return;
+    
+    currentPaletteName = pKey;
+    showToast(`Paleta de colores cambiada a: ${colorPalettes[pKey].name}`);
+    
+    // Cerrar modal
+    const modal = document.getElementById('palette-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Aplicar a la interfaz
+    applyPaletteUI(pKey);
+    
+    // Re-seleccionar el estilo activo para pintar la previsualización del centro/reproductor
+    const activeCard = document.querySelector(`.style-card[data-style="${selectedStyle}"]`);
+    if (activeCard) {
+        selectStyle(activeCard);
+    }
+    
+    // Guardar en config del proyecto
+    if (projectConfig && currentProject) {
+        projectConfig.selected_palette = pKey;
+        projectConfig.style = selectedStyle;
+        projectConfig.custom_colors = colorPalettes[pKey].styles[selectedStyle].python;
+        
+        try {
+            await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project: currentProject,
+                    config: projectConfig
+                })
+            });
+        } catch (e) {
+            console.error("Error al guardar paleta en config:", e);
+        }
     }
 }

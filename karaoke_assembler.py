@@ -664,6 +664,8 @@ def main():
                     help='Muestra output completo de FFmpeg')
     ap.add_argument('--frames-dir',   default=None,
                     help='Carpeta para guardar frames (default: temporal auto-limpiada)')
+    ap.add_argument('--config',       default=None,
+                    help='Ruta al archivo config.json para colores personalizados')
 
     args = ap.parse_args()
 
@@ -684,7 +686,26 @@ def main():
 
     # ── Aplicar estilo ────────────────────────────────────────────────────────
     global C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT
-    st = STYLES.get(args.style, STYLES['minimal'])
+    st = STYLES.get(args.style, STYLES['minimal']).copy()
+    
+    if args.config:
+        try:
+            import json
+            config_path = Path(args.config)
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    cfg_data = json.load(f)
+                    if 'custom_colors' in cfg_data:
+                        cc = cfg_data['custom_colors']
+                        if 'active' in cc: st['active'] = tuple(cc['active'])
+                        if 'sung' in cc: st['sung'] = tuple(cc['sung'])
+                        if 'unsung' in cc: st['unsung'] = tuple(cc['unsung'])
+                        if 'adj' in cc: st['adj'] = tuple(cc['adj'])
+                        if 'bg' in cc: st['bg'] = float(cc['bg'])
+                        if 'overlay' in cc: st['overlay'] = int(cc['overlay'])
+        except Exception as e:
+            print(f"[WARNING] No se pudo leer custom_colors de config: {e}")
+
     C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT = (
         st['active'], st['sung'], st['unsung'], st['adj'], st['overlay'], st['bg'])
     print(f"\n🎨  Estilo: {args.style} | Modo: {args.mode}")

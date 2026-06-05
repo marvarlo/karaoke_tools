@@ -536,6 +536,26 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     })
             return self.send_json({"fonts": available})
 
+        # Endpoint para servir el archivo de fuente binario (.ttf/.otf) al cliente
+        elif path == '/api/font_file':
+            font_path_str = query.get('path', [''])[0]
+            if not font_path_str:
+                return self.send_error_json("Falta el parámetro 'path'")
+            
+            filepath = Path(font_path_str)
+            if not filepath.exists() or filepath.is_dir() or filepath.suffix.lower() not in {'.ttf', '.otf'}:
+                return self.send_error_json("Archivo de fuente no válido o no encontrado", 404)
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'font/ttf')
+            self.send_header('Content-Length', str(filepath.stat().st_size))
+            self.send_header('Cache-Control', 'max-age=3600')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open(filepath, 'rb') as f:
+                self.wfile.write(f.read())
+            return
+
         # ── SERVIR INTERFAZ WEB (STATIC FILES) ────────────────────────────────
         
         # Redirigir la raíz a /index.html
@@ -970,7 +990,8 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 '--style', style,
                 '--resolution', resolution,
                 '--font-size', str(font_size),
-                '--map', str(map_json)
+                '--map', str(map_json),
+                '--config', str(cfg_file)
             ]
             
             if words_json.exists():
