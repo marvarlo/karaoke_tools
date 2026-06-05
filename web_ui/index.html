@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karaoke Maker — Wizard</title>
+    <!-- Google Fonts: Outfit (UI) y Cormorant Garamond (Lyrics) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="stars-bg"></div>
+    <div class="glow-orb" id="orb-1"></div>
+    <div class="glow-orb" id="orb-2"></div>
+
+    <div class="app-container">
+        
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="logo">
+                <span class="neon-text">KARAOKE</span><span class="gold-text">MAKER</span>
+                <span class="badge">v2.0</span>
+            </div>
+            <div class="project-selector-wrapper">
+                <label for="project-select">Proyecto Activo:</label>
+                <select id="project-select" class="glass-select">
+                    <option value="" disabled selected>Selecciona o crea un proyecto...</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- STEP PROGRESS INDICATOR -->
+        <div class="steps-indicator glass-panel">
+            <div class="step-node active" id="node-1" onclick="navigateToStep(1)">
+                <div class="node-circle">1</div>
+                <span>Proyecto</span>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-node disabled" id="node-2" onclick="navigateToStep(2)">
+                <div class="node-circle">2</div>
+                <span>Transcripción</span>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-node disabled" id="node-3" onclick="navigateToStep(3)">
+                <div class="node-circle">3</div>
+                <span>Fondos</span>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-node disabled" id="node-4" onclick="navigateToStep(4)">
+                <div class="node-circle">4</div>
+                <span>Mapa Visual</span>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-node disabled" id="node-5" onclick="navigateToStep(5)">
+                <div class="node-circle">5</div>
+                <span>Render</span>
+            </div>
+        </div>
+
+        <!-- WIZARD SCREENS -->
+        <main class="wizard-content">
+
+            <!-- STEP 1: PROJECT INITIALIZATION -->
+            <section class="wizard-step active-step" id="step-1">
+                <div class="step-grid">
+                    
+                    <div class="glass-card main-form">
+                        <h2><span class="gold-text">Paso 1:</span> Configurar Proyecto</h2>
+                        <p class="step-desc">Crea un nuevo proyecto musical o modifica uno seleccionado arriba.</p>
+                        
+                        <form id="init-project-form" onsubmit="handleInitProject(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="p-name">Nombre de Carpeta *</label>
+                                    <input type="text" id="p-name" placeholder="Ej: La_Vie_En_Rose" required class="glass-input">
+                                    <small>Solo letras, números, guiones y espacios.</small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row split-2">
+                                <div class="form-group">
+                                    <label for="p-title">Título de Canción</label>
+                                    <input type="text" id="p-title" placeholder="Ej: La Vie En Rose" class="glass-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="p-artist">Artista</label>
+                                    <input type="text" id="p-artist" placeholder="Ej: Édith Piaf" class="glass-input">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="p-audio">Archivo de Audio (MP3/WAV) *</label>
+                                <div class="file-upload-box" id="audio-dropzone">
+                                    <input type="file" id="p-audio" accept="audio/*" class="file-input">
+                                    <div class="upload-content">
+                                        <span class="upload-icon">🎵</span>
+                                        <span class="upload-text" id="audio-upload-label">Arrastra tu MP3 aquí o haz click para explorar</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row split-3">
+                                <div class="form-group">
+                                    <label for="p-lang">Idioma</label>
+                                    <select id="p-lang" class="glass-select">
+                                        <option value="es" selected>Español</option>
+                                        <option value="en">Inglés</option>
+                                        <option value="fr">Francés</option>
+                                        <option value="it">Italiano</option>
+                                        <option value="pt">Portugués</option>
+                                        <option value="de">Alemán</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="p-mode">Modo de Video</label>
+                                    <select id="p-mode" class="glass-select">
+                                        <option value="karaoke" selected>Karaoke (Palabra x Palabra)</option>
+                                        <option value="lyrics">Lyrics (Línea x Línea)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="p-whisper">Modelo Whisper</label>
+                                    <select id="p-whisper" class="glass-select">
+                                        <option value="tiny">Tiny (Rápido, impreciso)</option>
+                                        <option value="base">Base (Básico)</option>
+                                        <option value="small">Small (Equilibrado)</option>
+                                        <option value="medium" selected>Medium (Recomendado)</option>
+                                        <option value="large">Large (Máxima precisión)</option>
+                                        <option value="turbo">Turbo (Rápido y preciso)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="glow-button primary">Iniciar/Actualizar Proyecto</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="glass-card side-info">
+                        <h3>Configuración del Estilo</h3>
+                        <p class="sidebar-info">Elige el estilo visual que servirá como base para los textos y fondos del video.</p>
+                        
+                        <div class="style-selector-grid">
+                            <div class="style-card active" data-style="minimal" onclick="selectStyle(this)">
+                                <div class="style-preview" style="background: linear-gradient(135deg, #111 0%, #222 100%); border-color: #C8903A;">
+                                    <span class="preview-text" style="color: #F4EFE6;"><span style="color: #C8903A;">Mi</span> canción</span>
+                                </div>
+                                <span>Minimal (Ámbar/Gris)</span>
+                            </div>
+                            <div class="style-card" data-style="dark" onclick="selectStyle(this)">
+                                <div class="style-preview" style="background: linear-gradient(135deg, #050505 0%, #151515 100%); border-color: #FFCD5A;">
+                                    <span class="preview-text" style="color: #D7D7C3;"><span style="color: #FFCD5A;">Mi</span> canción</span>
+                                </div>
+                                <span>Dark (Dorado/Negro)</span>
+                            </div>
+                            <div class="style-card" data-style="neon" onclick="selectStyle(this)">
+                                <div class="style-preview" style="background: linear-gradient(135deg, #000 0%, #080a10 100%); border-color: #00FFB4;">
+                                    <span class="preview-text" style="color: #AFAFFF;"><span style="color: #00FFB4;">Mi</span> canción</span>
+                                </div>
+                                <span>Neon (Cian/Azul)</span>
+                            </div>
+                            <div class="style-card" data-style="vintage" onclick="selectStyle(this)">
+                                <div class="style-preview" style="background: linear-gradient(135deg, #2a221a 0%, #3d3428 100%); border-color: #FFD77D;">
+                                    <span class="preview-text" style="color: #F0DAB6;"><span style="color: #FFD77D;">Mi</span> canción</span>
+                                </div>
+                                <span>Vintage (Crema/Sepia)</span>
+                            </div>
+                        </div>
+
+                        <!-- FONT PREVIEW PANEL (SOLICITADO POR USUARIO) -->
+                        <div class="font-preview-panel glass-panel">
+                            <h4>Previsualización de Letra</h4>
+                            <div class="form-row split-2 font-settings-mini">
+                                <div class="form-group">
+                                    <label for="font-select-preview">Tipografía</label>
+                                    <select id="font-select-preview" class="glass-select" onchange="updateFontPreview()">
+                                        <option value="georgia" selected>Georgia</option>
+                                        <option value="cambria">Cambria</option>
+                                        <option value="times">Times New Roman</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="font-size-preview">Tamaño (pt)</label>
+                                    <input type="number" id="font-size-preview" value="72" min="20" max="150" class="glass-input" oninput="updateFontPreview()">
+                                </div>
+                            </div>
+                            <div class="lyric-preview-box" id="lyric-preview-box">
+                                <div class="row-prev adjacent-prev">Línea anterior cantada</div>
+                                <div class="row-prev active-prev">
+                                    <span class="sung">Caminando </span><span class="active-word">por </span><span class="unsung">las calles</span>
+                                </div>
+                                <div class="row-prev next-prev">Siguiente línea pendiente...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- STEP 2: WHISPER TRANSCRIPTION -->
+            <section class="wizard-step" id="step-2">
+                <div class="glass-card text-center">
+                    <h2><span class="gold-text">Paso 2:</span> Transcripción por Palabra con Whisper</h2>
+                    <p class="step-desc">Utilizaremos OpenAI Whisper para escuchar tu audio y generar el timing exacto de cada palabra.</p>
+                    
+                    <div class="transcription-trigger-container">
+                        <button class="glow-button success large-btn" id="run-whisper-btn" onclick="startWhisper()">
+                            🔥 Iniciar Transcripción con Whisper
+                        </button>
+                    </div>
+
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-label">
+                            <span id="transcription-status-text">Estado: En espera</span>
+                            <span id="transcription-progress-pct">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="transcription-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <span class="terminal-dot red"></span>
+                            <span class="terminal-dot yellow"></span>
+                            <span class="terminal-dot green"></span>
+                            <span class="terminal-title">Consola de Whisper (Timing)</span>
+                        </div>
+                        <pre class="terminal-body" id="whisper-console-output">Listo para transcribir. Presiona el botón para iniciar.
+La primera vez que uses un modelo, tomará unos minutos en descargarse automáticamente.</pre>
+                    </div>
+
+                    <div class="actions-footer">
+                        <button class="glow-button secondary" onclick="prevStep()">← Atrás</button>
+                        <button class="glow-button primary" id="step2-next" disabled onclick="nextStep()">Siguiente Paso →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 3: BACKGROUND IMAGES UPLOAD -->
+            <section class="wizard-step" id="step-3">
+                <div class="glass-card">
+                    <h2><span class="gold-text">Paso 3:</span> Subir Fondos (Generados en Nano Banana)</h2>
+                    <p class="step-desc">Sube las imágenes que servirán como fondo para las distintas secciones de tu video. Formatos soportados: PNG, JPG, JPEG, WEBP.</p>
+                    
+                    <div class="file-upload-box image-upload" id="images-dropzone">
+                        <input type="file" id="p-images" accept="image/*" multiple class="file-input" onchange="handleImagesUpload(event)">
+                        <div class="upload-content">
+                            <span class="upload-icon">🖼️</span>
+                            <span class="upload-text" id="images-upload-label">Arrastra varias imágenes aquí o haz click para explorar</span>
+                        </div>
+                    </div>
+
+                    <h3 class="gallery-title">Galería de Imágenes del Proyecto (<span id="gallery-count">0</span>)</h3>
+                    <div class="images-gallery" id="images-gallery">
+                        <div class="gallery-empty-message">Aún no has subido imágenes. ¡Arrastra archivos arriba!</div>
+                    </div>
+
+                    <div class="actions-footer">
+                        <button class="glow-button secondary" onclick="prevStep()">← Atrás</button>
+                        <button class="glow-button primary" id="step3-next" disabled onclick="nextStep()">Siguiente Paso →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 4: INTERACTIVE IMAGE MAPPING -->
+            <section class="wizard-step" id="step-4">
+                <div class="glass-card">
+                    <div class="map-header">
+                        <div>
+                            <h2><span class="gold-text">Paso 4:</span> Mapa de Imágenes y Tiempos (`map.json`)</h2>
+                            <p class="step-desc">El mapa ha sido generado dividiendo el video en las pausas instrumentales más largas. Asigna la imagen correspondiente a cada sección.</p>
+                        </div>
+                        <button class="glow-button success" onclick="saveMapData()">💾 Guardar Cambios en Mapa</button>
+                    </div>
+
+                    <div class="map-editor-container">
+                        <div class="map-sections-list" id="map-sections-list">
+                            <!-- Los segmentos se inyectarán mediante JS -->
+                        </div>
+                    </div>
+
+                    <div class="actions-footer">
+                        <button class="glow-button secondary" onclick="prevStep()">← Atrás</button>
+                        <button class="glow-button primary" id="step4-next" disabled onclick="nextStep()">Siguiente Paso →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 5: RENDER & EXPORT -->
+            <section class="wizard-step" id="step-5">
+                <div class="step-grid">
+                    
+                    <div class="glass-card render-settings-card">
+                        <h2><span class="gold-text">Paso 5:</span> Ensamblar Video Final</h2>
+                        <p class="step-desc">Elige las opciones de renderizado, resolución e inicia la composición del video con FFmpeg.</p>
+                        
+                        <div class="form-row split-2">
+                            <!-- ASPECT RATIO Y FORMATOS DE SALIDA (SOLICITADO POR USUARIO) -->
+                            <div class="form-group">
+                                <label for="render-aspect">Formato / Relación de Aspecto</label>
+                                <select id="render-aspect" class="glass-select" onchange="handleAspectChange()">
+                                    <option value="16:9" selected>Horizontal (16:9) — YouTube (1920x1080)</option>
+                                    <option value="9:16">Vertical (9:16) — Reels/TikTok (1080x1920)</option>
+                                    <option value="4K">Horizontal 4K (16:9) — (3840x2160)</option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="custom-res-group" style="display: none;">
+                                <label for="render-resolution">Resolución (WxH)</label>
+                                <input type="text" id="render-resolution" value="1920x1080" placeholder="Ej: 1920x1080" class="glass-input">
+                            </div>
+                        </div>
+
+                        <div class="form-row split-2">
+                            <div class="form-group">
+                                <label for="render-style">Estilo de Letras</label>
+                                <select id="render-style" class="glass-select">
+                                    <option value="minimal" selected>Minimal</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="neon">Neon</option>
+                                    <option value="vintage">Vintage</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="render-font-size">Tamaño de Fuente Principal (pt)</label>
+                                <input type="number" id="render-font-size" value="72" min="30" max="150" class="glass-input">
+                            </div>
+                        </div>
+
+                        <div class="render-buttons-row">
+                            <button class="glow-button secondary large-btn" onclick="startRender(true)">
+                                🎬 Renderizar Preview (30s)
+                            </button>
+                            <button class="glow-button success large-btn" onclick="startRender(false)">
+                                🚀 Renderizar Video Completo
+                            </button>
+                        </div>
+
+                        <div class="progress-bar-container" style="margin-top: 25px;">
+                            <div class="progress-bar-label">
+                                <span id="render-status-text">Estado: En espera</span>
+                                <span id="render-progress-pct">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="render-progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <div class="terminal-container mini-terminal">
+                            <div class="terminal-header">
+                                <span class="terminal-title">Logs de Render (FFmpeg)</span>
+                            </div>
+                            <pre class="terminal-body" id="render-console-output">Listo para ensamblar. Escoge opciones y dale clic a renderizar.</pre>
+                        </div>
+                    </div>
+
+                    <div class="glass-card render-preview-card text-center">
+                        <h3>Reproductor del Video Generado</h3>
+                        <p class="sidebar-info">Aquí aparecerá el video de vista previa o final una vez terminado el renderizado.</p>
+                        
+                        <div class="video-container glass-panel">
+                            <video id="output-video-player" controls preload="metadata">
+                                <source src="" type="video/mp4">
+                                Tu navegador no soporta reproducción de video en HTML5.
+                            </video>
+                            <div class="video-placeholder" id="video-player-placeholder">
+                                <span class="placeholder-icon">🎬</span>
+                                <span class="placeholder-text">Video no generado aún. Genera una vista previa o el video completo a la izquierda.</span>
+                            </div>
+                        </div>
+
+                        <div class="video-download-actions" style="display: none;" id="video-actions-box">
+                            <a href="" id="download-video-btn" download class="glow-button primary" style="text-decoration: none; display: inline-block;">📥 Descargar Video</a>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
+
+    </div>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
