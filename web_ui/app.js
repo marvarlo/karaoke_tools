@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFonts();
     setupDragAndDrop();
     setupAspectChangeHandler();
+    setupSyncHandlers();
     updateFontPreview();
 });
 
@@ -101,7 +102,10 @@ async function loadProjects(selectNewProject = "") {
         const res = await fetch('/api/projects');
         const data = await res.json();
         
-        projectSelect.innerHTML = '<option value="" disabled selected>Selecciona o crea un proyecto...</option>';
+        projectSelect.innerHTML = `
+            <option value="" disabled selected>Selecciona o crea un proyecto...</option>
+            <option value="__new_project__">+ Crear nuevo proyecto...</option>
+        `;
         data.projects.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.name;
@@ -121,8 +125,55 @@ async function loadProjects(selectNewProject = "") {
 }
 
 projectSelect.addEventListener('change', (e) => {
-    handleProjectChange(e.target.value);
+    if (e.target.value === '__new_project__') {
+        initNewProjectForm();
+    } else {
+        handleProjectChange(e.target.value);
+    }
 });
+
+function initNewProjectForm() {
+    currentProject = "";
+    projectConfig = null;
+    projectStatus = null;
+    projectImages = [];
+    mapData = null;
+    lyricsData = null;
+    
+    // Habilitar y limpiar formulario
+    const nameInput = document.getElementById('p-name');
+    nameInput.value = "";
+    nameInput.disabled = false;
+    
+    document.getElementById('p-title').value = "";
+    document.getElementById('p-artist').value = "";
+    document.getElementById('p-lang').value = "es";
+    document.getElementById('p-mode').value = "karaoke";
+    document.getElementById('p-whisper').value = "medium";
+    
+    // Resetear estilo
+    selectStyle(document.querySelector('.style-card[data-style="minimal"]'));
+    
+    // Limpiar preview de audio
+    document.getElementById('p-audio').value = "";
+    document.getElementById('audio-upload-label').innerText = "Arrastra tu MP3 aquí o haz click para explorar";
+    
+    // Ocultar editor
+    document.getElementById('lyrics-editor-card').style.display = 'none';
+    
+    // Deshabilitar pasos del wizard
+    document.getElementById('node-2').classList.add('disabled');
+    document.getElementById('node-3').classList.add('disabled');
+    document.getElementById('node-4').classList.add('disabled');
+    document.getElementById('node-5').classList.add('disabled');
+    
+    document.getElementById('step2-next').setAttribute('disabled', 'true');
+    document.getElementById('step3-next').setAttribute('disabled', 'true');
+    document.getElementById('step4-next').setAttribute('disabled', 'true');
+    
+    // Resetear video player
+    updateVideoPlayer();
+}
 
 async function handleProjectChange(projectName) {
     currentProject = projectName;
@@ -156,6 +207,7 @@ async function handleProjectChange(projectName) {
         });
 
         // Configuración de render en el paso 5
+        document.getElementById('render-mode').value = projectConfig.mode || "karaoke";
         document.getElementById('render-style').value = selectedStyle;
         document.getElementById('render-font-size').value = projectConfig.font_size || 72;
         
@@ -172,6 +224,14 @@ async function handleProjectChange(projectName) {
         
         // Activar/desactivar pasos del Wizard según el progreso real del proyecto
         updateStepAccess();
+
+        // Actualizar etiqueta del audio en Paso 1
+        const audioUploadLabel = document.getElementById('audio-upload-label');
+        if (projectStatus.audio_exists) {
+            audioUploadLabel.innerText = `Audio cargado: ${projectConfig.audio || 'audio.mp3'}`;
+        } else {
+            audioUploadLabel.innerText = "Arrastra tu MP3 aquí o haz click para explorar";
+        }
 
         // Si hay una tarea ejecutándose actualmente en backend, reconectar al log/polling
         checkCurrentTaskRunning();
@@ -269,6 +329,12 @@ function selectStyle(element) {
     document.querySelectorAll('.style-card').forEach(card => card.classList.remove('active'));
     element.classList.add('active');
     selectedStyle = element.dataset.style;
+    
+    // Sincronizar con el selector del paso 5
+    const renderStyleSelect = document.getElementById('render-style');
+    if (renderStyleSelect) {
+        renderStyleSelect.value = selectedStyle;
+    }
     
     // Cambiar estilo de la previsualización de fuentes también
     const stylePalette = {
@@ -530,8 +596,21 @@ function setupDragAndDrop() {
         if (files.length > 0) {
             document.getElementById('p-audio').files = files;
             document.getElementById('audio-upload-label').innerText = `Seleccionado: ${files[0].name}`;
+            extractMetadata(files[0]);
         }
     });
+    
+    // Manejar selección de audio manual (click)
+    const audioInput = document.getElementById('p-audio');
+    if (audioInput) {
+        audioInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                document.getElementById('audio-upload-label').innerText = `Seleccionado: ${files[0].name}`;
+                extractMetadata(files[0]);
+            }
+        });
+    }
     
     // Manejar drop de imágenes
     imageZone.addEventListener('drop', (e) => {
@@ -705,6 +784,29 @@ function setupAspectChangeHandler() {
     aspectSelect.addEventListener('change', handleAspectChange);
 }
 
+function setupSyncHandlers() {
+    const pMode = document.getElementById('p-mode');
+    const renderMode = document.getElementById('render-mode');
+    if (pMode && renderMode) {
+        pMode.addEventListener('change', (e) => {
+            renderMode.value = e.target.value;
+        });
+        renderMode.addEventListener('change', (e) => {
+            pMode.value = e.target.value;
+        });
+    }
+
+    const renderStyle = document.getElementById('render-style');
+    if (renderStyle) {
+        renderStyle.addEventListener('change', (e) => {
+            const styleCard = document.querySelector(`.style-card[data-style="${e.target.value}"]`);
+            if (styleCard) {
+                selectStyle(styleCard);
+            }
+        });
+    }
+}
+
 function handleAspectChange() {
     const aspectSelect = document.getElementById('render-aspect');
     const resGroup = document.getElementById('custom-res-group');
@@ -728,6 +830,7 @@ function handleAspectChange() {
 async function startRender(isPreview = false) {
     if (!currentProject) return;
     
+    const mode = document.getElementById('render-mode').value;
     const resolution = document.getElementById('render-resolution').value;
     const font_size = document.getElementById('render-font-size').value;
     const style = document.getElementById('render-style').value;
@@ -740,7 +843,8 @@ async function startRender(isPreview = false) {
                 preview: isPreview,
                 resolution: resolution,
                 font_size: parseInt(font_size),
-                style: style
+                style: style,
+                mode: mode
             })
         });
         const data = await res.json();
@@ -1019,5 +1123,203 @@ async function saveLyricsData() {
         }
     } catch (e) {
         showToast("Error al guardar letras", "error");
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PARSEO DE METADATOS ID3v1/ID3v2 DE AUDIO (MP3)
+// ──────────────────────────────────────────────────────────────────────────────
+function extractMetadata(file) {
+    const reader = new FileReader();
+    
+    // Leer los primeros 128 KB para ID3v2
+    reader.onload = function(e) {
+        const buffer = e.target.result;
+        const view = new DataView(buffer);
+        
+        let title = "";
+        let artist = "";
+        
+        try {
+            // Verificar firma ID3v2 "ID3"
+            if (view.byteLength >= 10 && 
+                view.getUint8(0) === 0x49 && 
+                view.getUint8(1) === 0x44 && 
+                view.getUint8(2) === 0x33) {
+                
+                const versionMajor = view.getUint8(3);
+                const sizeBytes = [view.getUint8(6), view.getUint8(7), view.getUint8(8), view.getUint8(9)];
+                const id3Size = (sizeBytes[0] << 21) | (sizeBytes[1] << 14) | (sizeBytes[2] << 7) | sizeBytes[3];
+                
+                let offset = 10;
+                const limit = Math.min(id3Size + 10, view.byteLength);
+                
+                // Si es ID3v2.2
+                if (versionMajor === 2) {
+                    while (offset < limit - 6) {
+                        let frameId = "";
+                        for (let i = 0; i < 3; i++) {
+                            const charCode = view.getUint8(offset + i);
+                            if (charCode >= 32 && charCode <= 126) {
+                                frameId += String.fromCharCode(charCode);
+                            }
+                        }
+                        if (frameId.length < 3 || frameId === "000") break;
+                        
+                        // Tamaño de frame en v2.2 es de 3 bytes
+                        const frameSize = (view.getUint8(offset + 3) << 16) | (view.getUint8(offset + 4) << 8) | view.getUint8(offset + 5);
+                        if (frameSize <= 0 || offset + 6 + frameSize > limit) break;
+                        
+                        if (frameId === "TT2" || frameId === "TP1") {
+                            const encoding = view.getUint8(offset + 6);
+                            const rawContent = new Uint8Array(buffer, offset + 7, frameSize - 1);
+                            
+                            let text = "";
+                            try {
+                                let decoderName = "iso-8859-1";
+                                if (encoding === 1) decoderName = "utf-16";
+                                const decoder = new TextDecoder(decoderName);
+                                text = decoder.decode(rawContent).replace(/\0/g, '').trim();
+                            } catch (err) {
+                                console.error("Error al decodificar texto metadata v2.2:", err);
+                            }
+                            
+                            if (frameId === "TT2") title = text;
+                            if (frameId === "TP1") artist = text;
+                        }
+                        offset += 6 + frameSize;
+                    }
+                } else {
+                    // ID3v2.3 o v2.4
+                    while (offset < limit - 10) {
+                        let frameId = "";
+                        for (let i = 0; i < 4; i++) {
+                            const charCode = view.getUint8(offset + i);
+                            if (charCode >= 32 && charCode <= 126) {
+                                frameId += String.fromCharCode(charCode);
+                            }
+                        }
+                        
+                        if (frameId.length < 4 || frameId === "0000") break;
+                        
+                        let frameSize = 0;
+                        if (versionMajor === 4) {
+                            // En v2.4 el tamaño del frame es synchsafe (7 bits por byte)
+                            const fsBytes = [view.getUint8(offset + 4), view.getUint8(offset + 5), view.getUint8(offset + 6), view.getUint8(offset + 7)];
+                            frameSize = (fsBytes[0] << 21) | (fsBytes[1] << 14) | (fsBytes[2] << 7) | fsBytes[3];
+                        } else {
+                            // En v2.3 es un entero de 32 bits estándar
+                            frameSize = view.getUint32(offset + 4);
+                        }
+                        
+                        if (frameSize <= 0 || offset + 10 + frameSize > limit) break;
+                        
+                        if (frameId === "TIT2" || frameId === "TPE1") {
+                            const encoding = view.getUint8(offset + 10);
+                            const rawContent = new Uint8Array(buffer, offset + 11, frameSize - 1);
+                            
+                            let text = "";
+                            try {
+                                let decoderName = "iso-8859-1";
+                                if (encoding === 1) {
+                                    decoderName = "utf-16";
+                                } else if (encoding === 2) {
+                                    decoderName = "utf-16be";
+                                } else if (encoding === 3) {
+                                    decoderName = "utf-8";
+                                }
+                                const decoder = new TextDecoder(decoderName);
+                                text = decoder.decode(rawContent).replace(/\0/g, '').trim();
+                            } catch (err) {
+                                console.error("Error al decodificar texto metadata:", err);
+                            }
+                            
+                            if (frameId === "TIT2") title = text;
+                            if (frameId === "TPE1") artist = text;
+                        }
+                        
+                        offset += 10 + frameSize;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error parsing ID3v2 tags:", err);
+        }
+        
+        // Fallback a ID3v1 si no se detectó por ID3v2
+        if (!title && !artist) {
+            try {
+                const lastReader = new FileReader();
+                lastReader.onload = function(le) {
+                    try {
+                        const lastBuffer = le.target.result;
+                        const lastView = new DataView(lastBuffer);
+                        if (lastView.byteLength === 128 &&
+                            lastView.getUint8(0) === 0x54 && 
+                            lastView.getUint8(1) === 0x41 && 
+                            lastView.getUint8(2) === 0x47) {
+                            
+                            const decoder = new TextDecoder("iso-8859-1");
+                            const titleBytes = new Uint8Array(lastBuffer, 3, 30);
+                            const artistBytes = new Uint8Array(lastBuffer, 33, 30);
+                            
+                            title = decoder.decode(titleBytes).replace(/\0/g, '').trim();
+                            artist = decoder.decode(artistBytes).replace(/\0/g, '').trim();
+                            
+                            applyMetadata(title, artist, file.name);
+                        } else {
+                            applyMetadata("", "", file.name);
+                        }
+                    } catch (err1) {
+                        console.error("Error parsing ID3v1 tags inside onload:", err1);
+                        applyMetadata("", "", file.name);
+                    }
+                };
+                const slice = file.slice(Math.max(0, file.size - 128));
+                lastReader.readAsArrayBuffer(slice);
+            } catch (err2) {
+                console.error("Error slicing or reading for ID3v1:", err2);
+                applyMetadata("", "", file.name);
+            }
+        } else {
+            applyMetadata(title, artist, file.name);
+        }
+    };
+    
+    try {
+        const headerSlice = file.slice(0, Math.min(128 * 1024, file.size));
+        reader.readAsArrayBuffer(headerSlice);
+    } catch (err) {
+        console.error("Error reading file header for ID3v2:", err);
+        applyMetadata("", "", file.name);
+    }
+}
+
+function applyMetadata(title, artist, filename) {
+    const nameInput = document.getElementById('p-name');
+    const titleInput = document.getElementById('p-title');
+    const artistInput = document.getElementById('p-artist');
+    
+    if (title) {
+        titleInput.value = title;
+        let folderName = title.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9\s_-]/g, "")
+            .replace(/\s+/g, "_");
+        nameInput.value = folderName;
+    } else {
+        const base = filename.replace(/\.[^/.]+$/, "")
+            .toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9\s_-]/g, "")
+            .replace(/\s+/g, "_");
+        nameInput.value = base;
+        titleInput.value = filename.replace(/\.[^/.]+$/, "");
+    }
+    
+    if (artist) {
+        artistInput.value = artist;
+    } else {
+        artistInput.value = "";
     }
 }

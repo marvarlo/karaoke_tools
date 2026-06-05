@@ -425,8 +425,12 @@ def draw_karaoke_line(draw, words: List[Word], active: int,
             pass
 
     # Mapear active_idx a cada fila
-    act1 = active if 0 <= active < split else -2    # -2 = toda fila cantada
-    act2 = active - split if active >= split else -1 # -1 = toda fila pendiente
+    if active == -3:
+        act1 = -3
+        act2 = -3
+    else:
+        act1 = active if 0 <= active < split else -2    # -2 = toda fila cantada
+        act2 = active - split if active >= split else -1 # -1 = toda fila pendiente
 
     lh = _line_height(font) + 10   # separación entre las dos filas
 

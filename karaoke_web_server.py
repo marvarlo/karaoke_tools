@@ -508,8 +508,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 return self.send_error_json("El nombre del proyecto contiene caracteres no válidos")
 
             project_path = WORKSPACE_DIR / name
-            if project_path.exists():
-                return self.send_error_json(f"Ya existe una carpeta con el nombre '{name}'")
+            is_new = not project_path.exists()
 
             # Crear directorios
             project_path.mkdir(parents=True, exist_ok=True)
@@ -519,16 +518,26 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             # Manejar el audio
             audio_field = files.get('audio')
             audio_filename = "audio.mp3"
+            
+            if not is_new:
+                # Si el proyecto ya existe, recuperar el nombre del archivo de audio de la configuración previa
+                cfg_file = project_path / 'config.json'
+                if cfg_file.exists():
+                    try:
+                        old_cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+                        audio_filename = old_cfg.get('audio', 'audio.mp3')
+                    except Exception:
+                        pass
+
             if audio_field and audio_field['content']:
-                # Guardar el archivo subido
+                # Guardar el archivo subido si se proporciona uno nuevo
                 orig_filename = audio_field['filename']
                 ext = Path(orig_filename).suffix.lower() or '.mp3'
                 audio_filename = f"audio{ext}"
                 with open(project_path / audio_filename, 'wb') as f:
                     f.write(audio_field['content'])
-            else:
-                # Copiar un archivo vacío de prueba o dejar que lo ponga después
-                # Para evitar fallos, creamos un archivo vacío si no se subió nada
+            elif is_new:
+                # Solo si el proyecto es nuevo creamos un archivo de audio vacío si no se subió nada
                 (project_path / 'audio.mp3').touch()
 
             # Configuración
@@ -842,7 +851,18 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 return self.send_error_json("Proyecto no encontrado")
                 
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+            mode = data.get('mode', cfg.get('mode', 'karaoke'))
             
+            # Persistir las opciones de renderizado elegidas por el usuario en config.json
+            cfg['mode'] = mode
+            cfg['style'] = style
+            cfg['resolution'] = resolution
+            cfg['font_size'] = font_size
+            try:
+                cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+            except Exception as e:
+                print(f"[WARNING] No se pudo guardar config.json al renderizar: {e}")
+                
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
             words_srt = project_path / 'output' / 'words.srt'
             words_json = project_path / 'output' / 'words.json'
@@ -863,7 +883,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 '--srt', str(words_srt),
                 '--audio', str(audio_path),
                 '--output', str(output_mp4),
-                '--mode', cfg.get('mode', 'karaoke'),
+                '--mode', mode,
                 '--style', style,
                 '--resolution', resolution,
                 '--font-size', str(font_size),
