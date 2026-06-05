@@ -16,8 +16,46 @@ import subprocess
 import threading
 import mimetypes
 import urllib.parse
+import unicodedata
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+def get_clean_audio_name(cfg, project_name):
+    # Intentar obtener de original_audio_name
+    name = cfg.get('original_audio_name', '')
+    if not name:
+        # Intentar obtener del título
+        name = cfg.get('title', '')
+    if not name:
+        # Si no, usar el nombre del proyecto
+        name = project_name
+    
+    # Quitar extensión si tiene
+    if '.' in name:
+        name = Path(name).stem
+        
+    # Reemplazar espacios por guiones y normalizar
+    name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('utf-8')
+    # Reemplazar espacios por guiones
+    name = name.replace(' ', '-')
+    # Solo caracteres alfanuméricos, guiones y guiones bajos
+    clean_name = "".join(c for c in name if c.isalnum() or c in ('-', '_'))
+    # Quitar guiones duplicados y extremos
+    while '--' in clean_name:
+        clean_name = clean_name.replace('--', '-')
+    return clean_name.strip('-')
+
+def get_dynamic_output_name(cfg, project_name, preview=False, mode=None):
+    if mode is None:
+        mode = cfg.get('mode', 'karaoke')
+    # Mode can be 'lyrics' or 'karaoke'
+    suffix = "Lyrics" if mode == "lyrics" else "karaoke"
+    clean_audio = get_clean_audio_name(cfg, project_name)
+    if preview:
+        return f"{clean_audio}-{suffix}-preview.mp4"
+    else:
+        return f"{clean_audio}-{suffix}.mp4"
+
 
 # Intentar registrar mime-types adicionales
 mimetypes.add_type('text/css', '.css')
@@ -327,8 +365,8 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     "words_json_exists": (out_dir / 'words.json').exists(),
                     "words_srt_exists": (out_dir / 'words.srt').exists(),
                     "map_exists": (out_dir / 'map.json').exists(),
-                    "video_exists": (out_dir / config.get('output_name', 'karaoke.mp4')).exists(),
-                    "preview_exists": (out_dir / f"{Path(config.get('output_name', 'karaoke.mp4')).stem}_preview.mp4").exists()
+                    "video_exists": (out_dir / get_dynamic_output_name(config, project_name, preview=False)).exists(),
+                    "preview_exists": (out_dir / get_dynamic_output_name(config, project_name, preview=True)).exists()
                 },
                 "images": images_list
             }
@@ -410,6 +448,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
         elif path == '/api/video':
             project_name = query.get('project', [''])[0]
             preview = query.get('preview', ['false'])[0] == 'true'
+            is_download = query.get('download', ['false'])[0] == 'true'
             if not project_name:
                 return self.send_error_json("Falta 'project'")
             
@@ -419,9 +458,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 return self.send_error_json("Proyecto no válido")
                 
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
-            out_name = cfg.get('output_name', 'karaoke.mp4')
-            if preview:
-                out_name = f"{Path(out_name).stem}_preview.mp4"
+            out_name = get_dynamic_output_name(cfg, project_name, preview=preview)
                 
             filepath = project_path / 'output' / out_name
             if not filepath.exists():
@@ -433,9 +470,45 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'video/mp4')
             self.send_header('Content-Length', str(filepath.stat().st_size))
             self.send_header('Access-Control-Allow-Origin', '*')
+            
+            if is_download:
+                self.send_header('Content-Disposition', f'attachment; filename="{out_name}"')
+                
             self.end_headers()
             with open(filepath, 'rb') as f:
                 # Escribir en bloques de 64KB para evitar sobrecarga de memoria
+                while True:
+                    data = f.read(65536)
+                    if not data:
+                        break
+                    self.wfile.write(data)
+            return
+
+        elif path == '/api/download_video':
+            project_name = query.get('project', [''])[0]
+            preview = query.get('preview', ['false'])[0] == 'true'
+            if not project_name:
+                return self.send_error_json("Falta 'project'")
+            
+            project_path = WORKSPACE_DIR / project_name
+            cfg_file = project_path / 'config.json'
+            if not cfg_file.exists():
+                return self.send_error_json("Proyecto no válido")
+                
+            cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+            out_name = get_dynamic_output_name(cfg, project_name, preview=preview)
+                
+            filepath = project_path / 'output' / out_name
+            if not filepath.exists():
+                return self.send_error_json("Video no encontrado", 404)
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Length', str(filepath.stat().st_size))
+            self.send_header('Content-Disposition', f'attachment; filename="{out_name}"')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open(filepath, 'rb') as f:
                 while True:
                     data = f.read(65536)
                     if not data:
@@ -518,6 +591,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             # Manejar el audio
             audio_field = files.get('audio')
             audio_filename = "audio.mp3"
+            original_audio_name = ""
             
             if not is_new:
                 # Si el proyecto ya existe, recuperar el nombre del archivo de audio de la configuración previa
@@ -526,12 +600,14 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     try:
                         old_cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
                         audio_filename = old_cfg.get('audio', 'audio.mp3')
+                        original_audio_name = old_cfg.get('original_audio_name', '')
                     except Exception:
                         pass
 
             if audio_field and audio_field['content']:
                 # Guardar el archivo subido si se proporciona uno nuevo
                 orig_filename = audio_field['filename']
+                original_audio_name = orig_filename
                 ext = Path(orig_filename).suffix.lower() or '.mp3'
                 audio_filename = f"audio{ext}"
                 with open(project_path / audio_filename, 'wb') as f:
@@ -546,6 +622,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 "title": form.get('title', name),
                 "artist": form.get('artist', ''),
                 "audio": audio_filename,
+                "original_audio_name": original_audio_name,
                 "language": form.get('lang', 'es'),
                 "whisper_model": form.get('whisper_model', 'medium'),
                 "mode": form.get('mode', 'karaoke'),
@@ -558,6 +635,8 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 "show_title": form.get('show_title') == 'true',
                 "gap_threshold": float(form.get('gap_threshold', 1.2))
             }
+            # Computar output_name dinámicamente y guardarlo
+            cfg['output_name'] = get_dynamic_output_name(cfg, name, preview=False, mode=cfg['mode'])
             
             (project_path / 'config.json').write_text(
                 json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8'
@@ -589,6 +668,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 # Mantener nota
                 old_cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
                 new_config['_nota'] = old_cfg.get('_nota', '')
+                new_config['output_name'] = get_dynamic_output_name(new_config, project_name, preview=False)
                 cfg_file.write_text(json.dumps(new_config, ensure_ascii=False, indent=2), encoding='utf-8')
                 return self.send_json({"success": True})
             except Exception as e:
@@ -858,6 +938,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             cfg['style'] = style
             cfg['resolution'] = resolution
             cfg['font_size'] = font_size
+            cfg['output_name'] = get_dynamic_output_name(cfg, project_name, preview=False, mode=mode)
             try:
                 cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
             except Exception as e:
@@ -868,12 +949,14 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             words_json = project_path / 'output' / 'words.json'
             map_json = project_path / 'output' / 'map.json'
             
-            stem = Path(cfg.get('output_name', 'karaoke.mp4')).stem
-            out_name = f"{stem}_preview.mp4" if preview else f"{stem}.mp4"
+            out_name = get_dynamic_output_name(cfg, project_name, preview=preview, mode=mode)
             output_mp4 = project_path / 'output' / out_name
             
             if output_mp4.exists():
-                output_mp4.unlink() # Eliminar si existía antes
+                try:
+                    output_mp4.unlink() # Eliminar si existía antes
+                except Exception:
+                    pass
             
             # Comando: python.exe karaoke_assembler.py ...
             cmd = [

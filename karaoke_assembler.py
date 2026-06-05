@@ -694,7 +694,17 @@ def main():
         print("❌  No se encontraron palabras en el SRT.")
         sys.exit(1)
 
-    total_dur = words[-1].end + 2.5   # 2.5s de buffer al final
+    # Intentar obtener la duración real del archivo de audio para que el video no se corte antes de tiempo
+    audio_dur = 0.0
+    try:
+        probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(args.audio)]
+        res = subprocess.run(probe_cmd, capture_output=True, text=True)
+        if res.returncode == 0:
+            audio_dur = float(res.stdout.strip())
+    except Exception:
+        pass
+
+    total_dur = audio_dur if audio_dur > 0.0 else (words[-1].end + 2.5)
 
     if args.preview:
         words     = [w for w in words if w.start < 30]

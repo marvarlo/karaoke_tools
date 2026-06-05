@@ -43,14 +43,14 @@ async function loadFonts() {
             const data = await res.json();
             systemFonts = data.fonts;
             const previewSelect = document.getElementById('font-select-preview');
-            
+
             // Vaciar select excepto las default
             previewSelect.innerHTML = `
                 <option value="georgia" selected>Georgia</option>
                 <option value="cambria">Cambria</option>
                 <option value="times">Times New Roman</option>
             `;
-            
+
             systemFonts.forEach(font => {
                 const opt = document.createElement('option');
                 opt.value = font.path;
@@ -68,10 +68,10 @@ function updateFontPreview() {
     const fontSelect = document.getElementById('font-select-preview');
     const fontSizeInput = document.getElementById('font-size-preview');
     const previewBox = document.getElementById('lyric-preview-box');
-    
+
     const selectedFont = fontSelect.value;
     const fontSize = fontSizeInput.value;
-    
+
     // Aplicar estilos a la caja de previsualización
     // Si es una ruta (de font de sistema), usamos el nombre de la fuente o fallback serif
     if (selectedFont.includes('/') || selectedFont.includes('\\')) {
@@ -86,7 +86,7 @@ function updateFontPreview() {
     } else {
         previewBox.style.fontFamily = selectedFont;
     }
-    
+
     // Cambiar tamaño de fuente principal (el del elemento active-prev)
     const activePrev = previewBox.querySelector('.active-prev');
     if (activePrev) {
@@ -101,7 +101,7 @@ async function loadProjects(selectNewProject = "") {
     try {
         const res = await fetch('/api/projects');
         const data = await res.json();
-        
+
         projectSelect.innerHTML = `
             <option value="" disabled selected>Selecciona o crea un proyecto...</option>
             <option value="__new_project__">+ Crear nuevo proyecto...</option>
@@ -139,38 +139,38 @@ function initNewProjectForm() {
     projectImages = [];
     mapData = null;
     lyricsData = null;
-    
+
     // Habilitar y limpiar formulario
     const nameInput = document.getElementById('p-name');
     nameInput.value = "";
     nameInput.disabled = false;
-    
+
     document.getElementById('p-title').value = "";
     document.getElementById('p-artist').value = "";
     document.getElementById('p-lang').value = "es";
     document.getElementById('p-mode').value = "karaoke";
     document.getElementById('p-whisper').value = "medium";
-    
+
     // Resetear estilo
     selectStyle(document.querySelector('.style-card[data-style="minimal"]'));
-    
+
     // Limpiar preview de audio
     document.getElementById('p-audio').value = "";
     document.getElementById('audio-upload-label').innerText = "Arrastra tu MP3 aquí o haz click para explorar";
-    
+
     // Ocultar editor
     document.getElementById('lyrics-editor-card').style.display = 'none';
-    
+
     // Deshabilitar pasos del wizard
     document.getElementById('node-2').classList.add('disabled');
     document.getElementById('node-3').classList.add('disabled');
     document.getElementById('node-4').classList.add('disabled');
     document.getElementById('node-5').classList.add('disabled');
-    
+
     document.getElementById('step2-next').setAttribute('disabled', 'true');
     document.getElementById('step3-next').setAttribute('disabled', 'true');
     document.getElementById('step4-next').setAttribute('disabled', 'true');
-    
+
     // Resetear video player
     updateVideoPlayer();
 }
@@ -178,11 +178,11 @@ function initNewProjectForm() {
 async function handleProjectChange(projectName) {
     currentProject = projectName;
     clearInterval(statusInterval); // Detener cualquier polling previo
-    
+
     try {
         const res = await fetch(`/api/info?project=${currentProject}`);
         const data = await res.json();
-        
+
         projectConfig = data.config;
         projectStatus = data.status;
         projectImages = data.images;
@@ -195,7 +195,7 @@ async function handleProjectChange(projectName) {
         document.getElementById('p-lang').value = projectConfig.language || "es";
         document.getElementById('p-mode').value = projectConfig.mode || "karaoke";
         document.getElementById('p-whisper').value = projectConfig.whisper_model || "medium";
-        
+
         // Estilo visual
         selectedStyle = projectConfig.style || "minimal";
         document.querySelectorAll('.style-card').forEach(card => {
@@ -210,10 +210,10 @@ async function handleProjectChange(projectName) {
         document.getElementById('render-mode').value = projectConfig.mode || "karaoke";
         document.getElementById('render-style').value = selectedStyle;
         document.getElementById('render-font-size').value = projectConfig.font_size || 72;
-        
+
         // Cargar miniaturas y mapa
         updateImagesGallery();
-        
+
         // Cargar editor de letras si ya está transcribido
         if (projectStatus.words_json_exists) {
             document.getElementById('lyrics-editor-card').style.display = 'block';
@@ -221,7 +221,7 @@ async function handleProjectChange(projectName) {
         } else {
             document.getElementById('lyrics-editor-card').style.display = 'none';
         }
-        
+
         // Activar/desactivar pasos del Wizard según el progreso real del proyecto
         updateStepAccess();
 
@@ -329,13 +329,13 @@ function selectStyle(element) {
     document.querySelectorAll('.style-card').forEach(card => card.classList.remove('active'));
     element.classList.add('active');
     selectedStyle = element.dataset.style;
-    
+
     // Sincronizar con el selector del paso 5
     const renderStyleSelect = document.getElementById('render-style');
     if (renderStyleSelect) {
         renderStyleSelect.value = selectedStyle;
     }
-    
+
     // Cambiar estilo de la previsualización de fuentes también
     const stylePalette = {
         'minimal': { active: '#C8903A', sung: '#F4EFE6', unsung: '#464646', bg: 'linear-gradient(135deg, #111 0%, #222 100%)' },
@@ -343,15 +343,15 @@ function selectStyle(element) {
         'neon': { active: '#00FFB4', sung: '#AFAFFF', unsung: '#414141', bg: 'linear-gradient(135deg, #000 0%, #080a10 100%)' },
         'vintage': { active: '#FFD77D', sung: '#F0DAB6', unsung: '#5f553e', bg: 'linear-gradient(135deg, #2a221a 0%, #3d3428 100%)' }
     };
-    
+
     const palette = stylePalette[selectedStyle];
     const previewBox = document.getElementById('lyric-preview-box');
     previewBox.style.background = palette.bg;
-    
+
     const sungWord = previewBox.querySelector('.sung');
     const actWord = previewBox.querySelector('.active-word');
     const unsungWord = previewBox.querySelector('.unsung');
-    
+
     if (sungWord) sungWord.style.color = palette.sung;
     if (actWord) actWord.style.color = palette.active;
     if (unsungWord) unsungWord.style.color = palette.unsung;
@@ -359,7 +359,7 @@ function selectStyle(element) {
 
 async function handleInitProject(event) {
     event.preventDefault();
-    
+
     const name = document.getElementById('p-name').value.trim();
     const title = document.getElementById('p-title').value.trim();
     const artist = document.getElementById('p-artist').value.trim();
@@ -367,9 +367,9 @@ async function handleInitProject(event) {
     const lang = document.getElementById('p-lang').value;
     const mode = document.getElementById('p-mode').value;
     const whisper_model = document.getElementById('p-whisper').value;
-    
+
     if (!name) return showToast("El nombre del proyecto es requerido", "error");
-    
+
     const formData = new FormData();
     formData.append('name', name);
     formData.append('title', title);
@@ -378,7 +378,7 @@ async function handleInitProject(event) {
     formData.append('mode', mode);
     formData.append('style', selectedStyle);
     formData.append('whisper_model', whisper_model);
-    
+
     // Verificar si se seleccionó archivo de audio
     if (audioInput.files.length > 0) {
         formData.append('audio', audioInput.files[0]);
@@ -390,7 +390,7 @@ async function handleInitProject(event) {
             method: 'POST',
             body: formData
         });
-        
+
         const data = await res.json();
         if (data.error) {
             showToast(data.error, "error");
@@ -410,11 +410,11 @@ async function handleInitProject(event) {
 // ──────────────────────────────────────────────────────────────────────────────
 async function startWhisper() {
     if (!currentProject) return;
-    
+
     try {
         const res = await fetch(`/api/run_whisper?project=${currentProject}`, { method: 'POST' });
         const data = await res.json();
-        
+
         if (data.error) {
             showToast(data.error, "error");
         } else {
@@ -429,17 +429,17 @@ async function startWhisper() {
 
 function pollStatus() {
     clearInterval(statusInterval);
-    
+
     statusInterval = setInterval(async () => {
         try {
             const res = await fetch(`/api/status?project=${currentProject}`);
             const data = await res.json();
-            
+
             const consoleOutput = document.getElementById('whisper-console-output');
             const progressFill = document.getElementById('transcription-progress-fill');
             const progressPct = document.getElementById('transcription-progress-pct');
             const statusText = document.getElementById('transcription-status-text');
-            
+
             // Si la tarea actual es del render FFmpeg, estamos en el paso 5.
             // Para Whisper, procesar aquí.
             if (data.task === 'whisper') {
@@ -448,7 +448,7 @@ function pollStatus() {
                 progressFill.style.width = `${data.progress}%`;
                 consoleOutput.innerText = data.logs || "Iniciando Whisper...";
                 consoleOutput.scrollTop = consoleOutput.scrollHeight; // Autoscroll
-                
+
                 if (data.status === 'success') {
                     clearInterval(statusInterval);
                     showToast("¡Transcripción Whisper completada con éxito!");
@@ -466,13 +466,13 @@ function pollStatus() {
                 const renderProgressFill = document.getElementById('render-progress-fill');
                 const renderProgressPct = document.getElementById('render-progress-pct');
                 const renderStatusText = document.getElementById('render-status-text');
-                
+
                 renderStatusText.innerText = `Estado: Componiendo video (${data.status})`;
                 renderProgressPct.innerText = `${data.progress}%`;
                 renderProgressFill.style.width = `${data.progress}%`;
                 renderConsole.innerText = data.logs || "Ejecutando render de video...";
                 renderConsole.scrollTop = renderConsole.scrollHeight;
-                
+
                 if (data.status === 'success') {
                     clearInterval(statusInterval);
                     showToast("¡Ensamblaje del video completado!");
@@ -492,7 +492,7 @@ async function checkCurrentTaskRunning() {
     try {
         const res = await fetch(`/api/status?project=${currentProject}`);
         const data = await res.json();
-        
+
         if (data.status === 'running') {
             pollStatus();
             if (data.task === 'whisper') {
@@ -511,25 +511,25 @@ function updateImagesGallery() {
     const gallery = document.getElementById('images-gallery');
     const galleryCount = document.getElementById('gallery-count');
     galleryCount.innerText = projectImages.length;
-    
+
     if (projectImages.length === 0) {
         gallery.innerHTML = '<div class="gallery-empty-message">Aún no has subido imágenes. ¡Arrastra archivos arriba!</div>';
         return;
     }
-    
+
     gallery.innerHTML = '';
     projectImages.forEach(imgName => {
         const item = document.createElement('div');
         item.className = 'gallery-item';
-        
+
         const img = document.createElement('img');
         img.src = `/api/image_file?project=${currentProject}&file=${imgName}`;
         img.alt = imgName;
-        
+
         const label = document.createElement('div');
         label.className = 'gallery-item-name';
         label.innerText = imgName;
-        
+
         item.appendChild(img);
         item.appendChild(label);
         gallery.appendChild(item);
@@ -539,14 +539,14 @@ function updateImagesGallery() {
 async function handleImagesUpload(event) {
     const files = event.target.files;
     if (files.length === 0) return;
-    
+
     showToast(`Subiendo ${files.length} imágenes...`, "warning");
-    
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const formData = new FormData();
         formData.append('image', file);
-        
+
         try {
             const res = await fetch(`/api/upload_image?project=${currentProject}`, {
                 method: 'POST',
@@ -560,7 +560,7 @@ async function handleImagesUpload(event) {
             showToast(`Error al subir la imagen ${file.name}`, "error");
         }
     }
-    
+
     showToast("Imágenes subidas correctamente.");
     // Recargar datos
     handleProjectChange(currentProject);
@@ -570,7 +570,7 @@ async function handleImagesUpload(event) {
 function setupDragAndDrop() {
     const audioZone = document.getElementById('audio-dropzone');
     const imageZone = document.getElementById('images-dropzone');
-    
+
     // Configurar zonas de arrastre
     [audioZone, imageZone].forEach(zone => {
         if (!zone) return;
@@ -580,7 +580,7 @@ function setupDragAndDrop() {
                 zone.classList.add('drag-over');
             }, false);
         });
-        
+
         ['dragleave', 'drop'].forEach(eventName => {
             zone.addEventListener(eventName, (e) => {
                 e.preventDefault();
@@ -588,7 +588,7 @@ function setupDragAndDrop() {
             }, false);
         });
     });
-    
+
     // Manejar drop de audio
     audioZone.addEventListener('drop', (e) => {
         const dt = e.dataTransfer;
@@ -599,7 +599,7 @@ function setupDragAndDrop() {
             extractMetadata(files[0]);
         }
     });
-    
+
     // Manejar selección de audio manual (click)
     const audioInput = document.getElementById('p-audio');
     if (audioInput) {
@@ -611,7 +611,7 @@ function setupDragAndDrop() {
             }
         });
     }
-    
+
     // Manejar drop de imágenes
     imageZone.addEventListener('drop', (e) => {
         const dt = e.dataTransfer;
@@ -630,11 +630,11 @@ function setupDragAndDrop() {
 // ──────────────────────────────────────────────────────────────────────────────
 async function loadMapEditor() {
     if (!currentProject) return;
-    
+
     try {
         const res = await fetch(`/api/map?project=${currentProject}`);
         if (!res.ok) return;
-        
+
         mapData = await res.json();
         renderMapEditorRows();
     } catch (e) {
@@ -645,101 +645,101 @@ async function loadMapEditor() {
 function renderMapEditorRows() {
     const container = document.getElementById('map-sections-list');
     container.innerHTML = '';
-    
+
     if (!mapData || !mapData.segments || mapData.segments.length === 0) {
         container.innerHTML = '<div class="gallery-empty-message">No hay segmentos en el mapa para editar.</div>';
         return;
     }
-    
+
     mapData.segments.forEach((seg, idx) => {
         const row = document.createElement('div');
         row.className = 'map-segment-row';
         row.dataset.index = idx;
-        
+
         // 1. Inputs de Tiempos
         const timingDiv = document.createElement('div');
         timingDiv.className = 'segment-timing';
-        
+
         const startField = document.createElement('div');
         startField.className = 'timing-field';
         startField.innerHTML = `
             <label>Inicio (s)</label>
             <input type="number" step="0.01" class="glass-input start-time-input" value="${seg.start}" onchange="updateSegmentTime(${idx}, 'start', this.value)">
         `;
-        
+
         const arrow = document.createElement('div');
         arrow.className = 'segment-connector-arrow';
         arrow.innerText = '→';
-        
+
         const endField = document.createElement('div');
         endField.className = 'timing-field';
         endField.innerHTML = `
             <label>Fin (s)</label>
             <input type="number" step="0.01" class="glass-input end-time-input" value="${seg.end}" onchange="updateSegmentTime(${idx}, 'end', this.value)">
         `;
-        
+
         timingDiv.appendChild(startField);
         timingDiv.appendChild(arrow);
         timingDiv.appendChild(endField);
-        
+
         // 2. Previsualización del Texto
         const textDiv = document.createElement('div');
         textDiv.className = 'segment-lyric';
-        
+
         // El assembler a veces pone _label, o el segment_id
         const labelText = seg._label || `Sección ${idx + 1}`;
-        
+
         textDiv.innerHTML = `
             <div class="segment-lyric-title">${labelText}</div>
             <div class="segment-text" title="Líricas aproximadas">Asigna una imagen de fondo para esta sección de la canción...</div>
         `;
-        
+
         // 3. Picker Visual de Miniaturas ( thumbnails )
         const pickerDiv = document.createElement('div');
         pickerDiv.className = 'segment-image-picker';
-        
+
         const pickerLabel = document.createElement('div');
         pickerLabel.className = 'segment-image-label';
         pickerLabel.innerText = "Imagen asignada:";
-        
+
         const thumbsGrid = document.createElement('div');
         thumbsGrid.className = 'thumbnail-picker-grid';
-        
+
         // Renderizar una miniatura para cada imagen del proyecto
         projectImages.forEach(imgName => {
             const imgPath = `images/${imgName}`;
             const isSelected = seg.image === imgPath || seg.image === imgName;
-            
+
             const thumb = document.createElement('div');
             thumb.className = `thumb-option ${isSelected ? 'selected' : ''}`;
             thumb.title = imgName;
-            
+
             const thumbImg = document.createElement('img');
             thumbImg.src = `/api/image_file?project=${currentProject}&file=${imgName}`;
-            
+
             thumb.appendChild(thumbImg);
-            
+
             // Asignar evento click para seleccionar esta imagen
             thumb.onclick = () => {
                 // Deseleccionar previas en esta fila
                 thumbsGrid.querySelectorAll('.thumb-option').forEach(t => t.classList.remove('selected'));
                 thumb.classList.add('selected');
-                
+
                 // Guardar selección
                 seg.image = imgPath;
                 showToast(`Asignada imagen '${imgName}' a la Sección ${idx + 1}`);
             };
-            
+
             thumbsGrid.appendChild(thumb);
         });
-        
+
         pickerDiv.appendChild(pickerLabel);
         pickerDiv.appendChild(thumbsGrid);
-        
+
         row.appendChild(timingDiv);
         row.appendChild(textDiv);
         row.appendChild(pickerDiv);
-        
+
         container.appendChild(row);
     });
 }
@@ -752,7 +752,7 @@ function updateSegmentTime(idx, field, value) {
 
 async function saveMapData() {
     if (!currentProject || !mapData) return;
-    
+
     try {
         const res = await fetch('/api/map', {
             method: 'POST',
@@ -763,7 +763,7 @@ async function saveMapData() {
             })
         });
         const data = await res.json();
-        
+
         if (data.error) {
             showToast(data.error, "error");
         } else {
@@ -811,7 +811,7 @@ function handleAspectChange() {
     const aspectSelect = document.getElementById('render-aspect');
     const resGroup = document.getElementById('custom-res-group');
     const resInput = document.getElementById('render-resolution');
-    
+
     const val = aspectSelect.value;
     if (val === '16:9') {
         resGroup.style.display = 'none';
@@ -829,12 +829,12 @@ function handleAspectChange() {
 
 async function startRender(isPreview = false) {
     if (!currentProject) return;
-    
+
     const mode = document.getElementById('render-mode').value;
     const resolution = document.getElementById('render-resolution').value;
     const font_size = document.getElementById('render-font-size').value;
     const style = document.getElementById('render-style').value;
-    
+
     try {
         const res = await fetch(`/api/run_assembler?project=${currentProject}`, {
             method: 'POST',
@@ -848,7 +848,7 @@ async function startRender(isPreview = false) {
             })
         });
         const data = await res.json();
-        
+
         if (data.error) {
             showToast(data.error, "error");
         } else {
@@ -860,26 +860,63 @@ async function startRender(isPreview = false) {
     }
 }
 
+function getCleanAudioName() {
+    let name = (projectConfig && projectConfig.original_audio_name) || "";
+    if (!name) {
+        name = (projectConfig && projectConfig.title) || "";
+    }
+    if (!name) {
+        name = currentProject;
+    }
+
+    // Quitar extensión
+    if (name.includes('.')) {
+        name = name.substring(0, name.lastIndexOf('.'));
+    }
+
+    // Normalizar y reemplazar espacios/acentos
+    name = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    name = name.replace(/\s+/g, '-');
+    let cleanName = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    while (cleanName.includes('--')) {
+        cleanName = cleanName.replace('--', '-');
+    }
+    return cleanName.replace(/^-+|-+$/g, '');
+}
+
+function getDynamicOutputName(isPreview) {
+    const cleanAudio = getCleanAudioName();
+    const mode = (projectConfig && projectConfig.mode) || "karaoke";
+    const suffix = mode === "lyrics" ? "Lyrics" : "karaoke";
+    return isPreview ? `${cleanAudio}-${suffix}-preview.mp4` : `${cleanAudio}-${suffix}.mp4`;
+}
+
 function updateVideoPlayer() {
     const player = document.getElementById('output-video-player');
     const placeholder = document.getElementById('video-player-placeholder');
     const actionsBox = document.getElementById('video-actions-box');
     const downloadBtn = document.getElementById('download-video-btn');
-    
+
     // Verificamos si existe el video (completo o preview)
     const hasVideo = projectStatus.video_exists || projectStatus.preview_exists;
-    
+
     if (hasVideo) {
         // Preferir el video completo si existe, si no la preview
         const isPreview = !projectStatus.video_exists && projectStatus.preview_exists;
         const videoUrl = `/api/video?project=${currentProject}&preview=${isPreview}&t=${Date.now()}`;
-        
+
         player.src = videoUrl;
         player.style.display = 'block';
         placeholder.style.display = 'none';
-        
+
         actionsBox.style.display = 'block';
-        downloadBtn.href = videoUrl;
+
+        // Usar la ruta dedicada de descarga para saltarse la caché del reproductor y forzar Save As
+        downloadBtn.href = `/api/download_video?project=${currentProject}&preview=${isPreview}&t=${Date.now()}`;
+
+        const downloadFilename = getDynamicOutputName(isPreview);
+        downloadBtn.setAttribute('download', downloadFilename);
+
         downloadBtn.innerText = isPreview ? '📥 Descargar Vista Previa (30s)' : '📥 Descargar Video Completo';
     } else {
         player.src = '';
@@ -908,50 +945,50 @@ async function loadLyricsEditor() {
 function renderLyricsEditor() {
     const container = document.getElementById('lyrics-editor-list');
     container.innerHTML = '';
-    
+
     if (!lyricsData || !lyricsData.segments || lyricsData.segments.length === 0) {
         container.innerHTML = '<div class="gallery-empty-message">No hay letra disponible para editar.</div>';
         return;
     }
-    
+
     lyricsData.segments.forEach((seg, segIdx) => {
         const segBox = document.createElement('div');
         segBox.className = 'segment-editor-box';
         segBox.dataset.index = segIdx;
-        
+
         // Header del segmento
         const header = document.createElement('div');
         header.className = 'segment-editor-header';
-        
+
         const title = document.createElement('h4');
         const startTime = seg.start !== undefined ? parseFloat(seg.start).toFixed(2) : '0.00';
         const endTime = seg.end !== undefined ? parseFloat(seg.end).toFixed(2) : '0.00';
         title.innerText = `Segmento ${segIdx + 1} (${startTime}s - ${endTime}s)`;
-        
+
         const deleteSegBtn = document.createElement('button');
         deleteSegBtn.className = 'delete-segment-btn';
         deleteSegBtn.innerText = '🗑️ Eliminar';
         deleteSegBtn.onclick = () => deleteSegment(segIdx);
-        
+
         header.appendChild(title);
         header.appendChild(deleteSegBtn);
-        
+
         // Contenedor de palabras
         const wordsContainer = document.createElement('div');
         wordsContainer.className = 'words-edit-container';
-        
+
         // Renderizar palabras
         const wordsList = seg.words || [];
         wordsList.forEach((w, wIdx) => {
             const wordCard = document.createElement('div');
             wordCard.className = 'word-edit-card';
-            
+
             // Botón eliminar palabra
             const delWordBtn = document.createElement('span');
             delWordBtn.className = 'word-delete-btn';
             delWordBtn.innerHTML = '&times;';
             delWordBtn.onclick = () => deleteWord(segIdx, wIdx);
-            
+
             // Input texto de palabra
             const wordInput = document.createElement('input');
             wordInput.type = 'text';
@@ -962,11 +999,11 @@ function renderLyricsEditor() {
                 w.word = e.target.value;
                 updateSegmentFullText(segIdx);
             };
-            
+
             // Contenedor de tiempos
             const timesDiv = document.createElement('div');
             timesDiv.className = 'word-edit-times';
-            
+
             // Input start
             const startDiv = document.createElement('div');
             startDiv.className = 'timing-field-mini';
@@ -980,7 +1017,7 @@ function renderLyricsEditor() {
                 updateSegmentTimesFromWords(segIdx);
             };
             startDiv.appendChild(startInput);
-            
+
             // Input end
             const endDiv = document.createElement('div');
             endDiv.className = 'timing-field-mini';
@@ -994,28 +1031,28 @@ function renderLyricsEditor() {
                 updateSegmentTimesFromWords(segIdx);
             };
             endDiv.appendChild(endInput);
-            
+
             timesDiv.appendChild(startDiv);
             timesDiv.appendChild(endDiv);
-            
+
             wordCard.appendChild(delWordBtn);
             wordCard.appendChild(wordInput);
             wordCard.appendChild(timesDiv);
-            
+
             wordsContainer.appendChild(wordCard);
         });
-        
+
         // Botón añadir palabra
         const addWordBtn = document.createElement('button');
         addWordBtn.className = 'add-word-btn-mini';
         addWordBtn.innerHTML = '➕ Añadir';
         addWordBtn.onclick = () => addWordToSegment(segIdx);
-        
+
         wordsContainer.appendChild(addWordBtn);
-        
+
         segBox.appendChild(header);
         segBox.appendChild(wordsContainer);
-        
+
         container.appendChild(segBox);
     });
 }
@@ -1029,12 +1066,12 @@ function updateSegmentFullText(segIdx) {
 function updateSegmentTimesFromWords(segIdx) {
     const seg = lyricsData.segments[segIdx];
     if (!seg || !seg.words || seg.words.length === 0) return;
-    
+
     // El inicio del segmento es el inicio de su primera palabra
     seg.start = seg.words[0].start;
     // El fin del segmento es el fin de su última palabra
     seg.end = seg.words[seg.words.length - 1].end;
-    
+
     // Actualizar visualmente el título del segmento en el DOM
     const segBox = document.querySelector(`.segment-editor-box[data-index="${segIdx}"]`);
     if (segBox) {
@@ -1061,11 +1098,11 @@ function deleteWord(segIdx, wIdx) {
     if (!lyricsData || !lyricsData.segments[segIdx]) return;
     const seg = lyricsData.segments[segIdx];
     seg.words.splice(wIdx, 1);
-    
+
     // Actualizar texto y tiempos del segmento
     updateSegmentFullText(segIdx);
     updateSegmentTimesFromWords(segIdx);
-    
+
     renderLyricsEditor();
 }
 
@@ -1073,7 +1110,7 @@ function addWordToSegment(segIdx) {
     if (!lyricsData || !lyricsData.segments[segIdx]) return;
     const seg = lyricsData.segments[segIdx];
     if (!seg.words) seg.words = [];
-    
+
     // Determinar tiempos razonables por defecto para la nueva palabra
     let newStart = 0.0;
     let newEnd = 1.0;
@@ -1085,23 +1122,23 @@ function addWordToSegment(segIdx) {
         newStart = seg.start || 0.0;
         newEnd = (seg.start || 0.0) + 1.0;
     }
-    
+
     seg.words.push({
         word: "Nueva",
         start: parseFloat(newStart.toFixed(3)),
         end: parseFloat(newEnd.toFixed(3)),
         confidence: 1.0
     });
-    
+
     updateSegmentFullText(segIdx);
     updateSegmentTimesFromWords(segIdx);
-    
+
     renderLyricsEditor();
 }
 
 async function saveLyricsData() {
     if (!currentProject || !lyricsData) return;
-    
+
     try {
         showToast("Guardando cambios de letras...", "warning");
         const res = await fetch('/api/save_words', {
@@ -1113,7 +1150,7 @@ async function saveLyricsData() {
             })
         });
         const data = await res.json();
-        
+
         if (data.error) {
             showToast(data.error, "error");
         } else {
@@ -1131,29 +1168,29 @@ async function saveLyricsData() {
 // ──────────────────────────────────────────────────────────────────────────────
 function extractMetadata(file) {
     const reader = new FileReader();
-    
+
     // Leer los primeros 128 KB para ID3v2
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const buffer = e.target.result;
         const view = new DataView(buffer);
-        
+
         let title = "";
         let artist = "";
-        
+
         try {
             // Verificar firma ID3v2 "ID3"
-            if (view.byteLength >= 10 && 
-                view.getUint8(0) === 0x49 && 
-                view.getUint8(1) === 0x44 && 
+            if (view.byteLength >= 10 &&
+                view.getUint8(0) === 0x49 &&
+                view.getUint8(1) === 0x44 &&
                 view.getUint8(2) === 0x33) {
-                
+
                 const versionMajor = view.getUint8(3);
                 const sizeBytes = [view.getUint8(6), view.getUint8(7), view.getUint8(8), view.getUint8(9)];
                 const id3Size = (sizeBytes[0] << 21) | (sizeBytes[1] << 14) | (sizeBytes[2] << 7) | sizeBytes[3];
-                
+
                 let offset = 10;
                 const limit = Math.min(id3Size + 10, view.byteLength);
-                
+
                 // Si es ID3v2.2
                 if (versionMajor === 2) {
                     while (offset < limit - 6) {
@@ -1165,15 +1202,15 @@ function extractMetadata(file) {
                             }
                         }
                         if (frameId.length < 3 || frameId === "000") break;
-                        
+
                         // Tamaño de frame en v2.2 es de 3 bytes
                         const frameSize = (view.getUint8(offset + 3) << 16) | (view.getUint8(offset + 4) << 8) | view.getUint8(offset + 5);
                         if (frameSize <= 0 || offset + 6 + frameSize > limit) break;
-                        
+
                         if (frameId === "TT2" || frameId === "TP1") {
                             const encoding = view.getUint8(offset + 6);
                             const rawContent = new Uint8Array(buffer, offset + 7, frameSize - 1);
-                            
+
                             let text = "";
                             try {
                                 let decoderName = "iso-8859-1";
@@ -1183,7 +1220,7 @@ function extractMetadata(file) {
                             } catch (err) {
                                 console.error("Error al decodificar texto metadata v2.2:", err);
                             }
-                            
+
                             if (frameId === "TT2") title = text;
                             if (frameId === "TP1") artist = text;
                         }
@@ -1199,9 +1236,9 @@ function extractMetadata(file) {
                                 frameId += String.fromCharCode(charCode);
                             }
                         }
-                        
+
                         if (frameId.length < 4 || frameId === "0000") break;
-                        
+
                         let frameSize = 0;
                         if (versionMajor === 4) {
                             // En v2.4 el tamaño del frame es synchsafe (7 bits por byte)
@@ -1211,13 +1248,13 @@ function extractMetadata(file) {
                             // En v2.3 es un entero de 32 bits estándar
                             frameSize = view.getUint32(offset + 4);
                         }
-                        
+
                         if (frameSize <= 0 || offset + 10 + frameSize > limit) break;
-                        
+
                         if (frameId === "TIT2" || frameId === "TPE1") {
                             const encoding = view.getUint8(offset + 10);
                             const rawContent = new Uint8Array(buffer, offset + 11, frameSize - 1);
-                            
+
                             let text = "";
                             try {
                                 let decoderName = "iso-8859-1";
@@ -1233,11 +1270,11 @@ function extractMetadata(file) {
                             } catch (err) {
                                 console.error("Error al decodificar texto metadata:", err);
                             }
-                            
+
                             if (frameId === "TIT2") title = text;
                             if (frameId === "TPE1") artist = text;
                         }
-                        
+
                         offset += 10 + frameSize;
                     }
                 }
@@ -1245,27 +1282,27 @@ function extractMetadata(file) {
         } catch (err) {
             console.error("Error parsing ID3v2 tags:", err);
         }
-        
+
         // Fallback a ID3v1 si no se detectó por ID3v2
         if (!title && !artist) {
             try {
                 const lastReader = new FileReader();
-                lastReader.onload = function(le) {
+                lastReader.onload = function (le) {
                     try {
                         const lastBuffer = le.target.result;
                         const lastView = new DataView(lastBuffer);
                         if (lastView.byteLength === 128 &&
-                            lastView.getUint8(0) === 0x54 && 
-                            lastView.getUint8(1) === 0x41 && 
+                            lastView.getUint8(0) === 0x54 &&
+                            lastView.getUint8(1) === 0x41 &&
                             lastView.getUint8(2) === 0x47) {
-                            
+
                             const decoder = new TextDecoder("iso-8859-1");
                             const titleBytes = new Uint8Array(lastBuffer, 3, 30);
                             const artistBytes = new Uint8Array(lastBuffer, 33, 30);
-                            
+
                             title = decoder.decode(titleBytes).replace(/\0/g, '').trim();
                             artist = decoder.decode(artistBytes).replace(/\0/g, '').trim();
-                            
+
                             applyMetadata(title, artist, file.name);
                         } else {
                             applyMetadata("", "", file.name);
@@ -1285,7 +1322,7 @@ function extractMetadata(file) {
             applyMetadata(title, artist, file.name);
         }
     };
-    
+
     try {
         const headerSlice = file.slice(0, Math.min(128 * 1024, file.size));
         reader.readAsArrayBuffer(headerSlice);
@@ -1299,7 +1336,7 @@ function applyMetadata(title, artist, filename) {
     const nameInput = document.getElementById('p-name');
     const titleInput = document.getElementById('p-title');
     const artistInput = document.getElementById('p-artist');
-    
+
     if (title) {
         titleInput.value = title;
         let folderName = title.toLowerCase()
@@ -1316,7 +1353,7 @@ function applyMetadata(title, artist, filename) {
         nameInput.value = base;
         titleInput.value = filename.replace(/\.[^/.]+$/, "");
     }
-    
+
     if (artist) {
         artistInput.value = artist;
     } else {
