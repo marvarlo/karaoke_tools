@@ -286,7 +286,16 @@ def load_map(map_path: Optional[str], images_dir: str, total: float) -> list:
     """Carga el mapa JSON o genera uno automático dividiendo el tiempo equitativamente."""
     if map_path and Path(map_path).exists():
         d = json.loads(Path(map_path).read_text(encoding='utf-8'))
-        return d['segments']
+        segments = d['segments']
+        # Asegurar que todas las rutas de imagen sean relativas a images_dir o absolutas
+        for seg in segments:
+            img_path = Path(seg['image'])
+            # Si la ruta no existe directamente, intentar resolverla dentro de images_dir
+            if not img_path.exists():
+                resolved = Path(images_dir) / img_path.name
+                if resolved.exists():
+                    seg['image'] = str(resolved)
+        return segments
 
     imgs = discover_images(images_dir)
     if not imgs:

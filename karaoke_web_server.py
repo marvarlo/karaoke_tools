@@ -77,10 +77,11 @@ class TaskManager:
         def worker():
             print(f"[RUN] Iniciando comando para {project_name} ({task_type}): {' '.join(cmd)}")
             self.set_task(project_name, task_type, status="running", progress=0, logs=f"--- Iniciando {task_type} ---\n")
-            
             try:
-                # Usar startupinfo en Windows para ocultar la consola del subproceso si es necesario,
-                # pero queremos leer su stdout/stderr en vivo.
+                # Forzar codificación UTF-8 en el subproceso Python en Windows
+                env = os.environ.copy()
+                env["PYTHONIOENCODING"] = "utf-8"
+                env["PYTHONUTF8"] = "1"
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
@@ -89,7 +90,8 @@ class TaskManager:
                     bufsize=1,
                     cwd=str(WORKSPACE_DIR),
                     encoding='utf-8',
-                    errors='ignore'
+                    errors='ignore',
+                    env=env
                 )
 
                 # Leer salida en tiempo real
@@ -618,6 +620,95 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_error_json(f"Error al guardar el mapa: {str(e)}")
 
+        # ── GUARDAR LETRAS Y PALABRAS EDITADAS (JSON + SRT) ───────────────────────
+        elif path == '/api/save_words':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+            
+            project_name = data.get('project')
+            segments = data.get('segments')
+            
+            if not project_name or segments is None:
+                return self.send_error_json("Parámetros incorrectos")
+                
+            project_path = WORKSPACE_DIR / project_name
+            out_dir = project_path / 'output'
+            words_json = out_dir / 'words.json'
+            words_srt = out_dir / 'words.srt'
+            
+            try:
+                # Cargar el JSON original para conservar campos como idioma, etc.
+                old_data = {}
+                if words_json.exists():
+                    old_data = json.loads(words_json.read_text(encoding='utf-8'))
+                
+                # Reconstruir listado plano de palabras (words_flat)
+                words_flat = []
+                for seg in segments:
+                    seg_id = int(seg.get('id', 0))
+                    seg_text = seg.get('text', '').strip()
+                    
+                    for w in seg.get('words', []):
+                        words_flat.append({
+                            "word": w.get('word', '').strip(),
+                            "start": round(float(w.get('start', 0.0)), 3),
+                            "end": round(float(w.get('end', 0.0)), 3),
+                            "duration_ms": int(round((float(w.get('end', 0.0)) - float(w.get('start', 0.0))) * 1000)),
+                            "confidence": round(float(w.get('confidence', 1.0)), 3),
+                            "segment_id": seg_id,
+                            "line_text": seg_text
+                        })
+                
+                # Formatear timestamps en segmentos para visualización
+                def fmt_display(sec):
+                    m = int(sec // 60)
+                    s = sec % 60
+                    return f"{m:02d}:{s:05.2f}"
+                
+                for seg in segments:
+                    seg['start_fmt'] = fmt_display(seg.get('start', 0.0))
+                    seg['end_fmt'] = fmt_display(seg.get('end', 0.0))
+                    seg['word_count'] = len(seg.get('words', []))
+                    # Limpiar campo line_text de cada palabra
+                    for w in seg.get('words', []):
+                        if 'line_text' in w:
+                            del w['line_text']
+                
+                new_data = {
+                    "language": old_data.get('language', 'es'),
+                    "total_words": len(words_flat),
+                    "total_segments": len(segments),
+                    "words_flat": words_flat,
+                    "segments": segments
+                }
+                
+                # Guardar words.json
+                words_json.write_text(json.dumps(new_data, ensure_ascii=False, indent=2), encoding='utf-8')
+                
+                # Generar words.srt
+                def fmt_srt(sec: float) -> str:
+                    total_ms = int(round(sec * 1000))
+                    ms = total_ms % 1000
+                    total_s = total_ms // 1000
+                    s = total_s % 60
+                    m = (total_s // 60) % 60
+                    h = total_s // 3600
+                    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+                
+                entries = []
+                for i, w in enumerate(words_flat, 1):
+                    entries.append(
+                        f"{i}\n"
+                        f"{fmt_srt(w['start'])} --> {fmt_srt(w['end'])}\n"
+                        f"{w['word']}\n"
+                    )
+                words_srt.write_text("\n".join(entries), encoding="utf-8")
+                
+                return self.send_json({"success": True})
+            except Exception as e:
+                return self.send_error_json(f"Error al guardar letras: {str(e)}")
+
         # ── EJECUTAR WHISPER ──────────────────────────────────────────────────
         elif path == '/api/run_whisper':
             project_name = query.get('project', [''])[0]
@@ -699,7 +790,10 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                             
                             # Ejecutar temporalmente y mover karaoke_map.json a output/map.json
                             task_manager.append_log(project_name, "\n⚙️ Generando mapa automático de imágenes (map.json) en base a silencios...\n")
-                            subprocess.run(gen_map_cmd, cwd=str(WORKSPACE_DIR))
+                            env = os.environ.copy()
+                            env["PYTHONIOENCODING"] = "utf-8"
+                            env["PYTHONUTF8"] = "1"
+                            subprocess.run(gen_map_cmd, cwd=str(WORKSPACE_DIR), env=env)
                             temp_map = WORKSPACE_DIR / 'karaoke_map.json'
                             if temp_map.exists():
                                 shutil.move(str(temp_map), str(map_json))
