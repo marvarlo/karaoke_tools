@@ -338,6 +338,27 @@ async function handleProjectChange(projectName) {
             }
         }
 
+        // Actualizar UI del Checkbox de Voz para Whisper
+        const whisperUseVocals = document.getElementById('whisper-use-vocals');
+        const whisperVocalsHint = document.getElementById('whisper-vocals-hint');
+        if (whisperUseVocals && whisperVocalsHint) {
+            if (projectStatus.instrumental_exists) {
+                whisperUseVocals.disabled = false;
+                if (projectConfig.transcribe_from_vocals !== undefined) {
+                    whisperUseVocals.checked = projectConfig.transcribe_from_vocals;
+                } else {
+                    whisperUseVocals.checked = true; // Preseleccionar por defecto si existe vocals.mp3
+                }
+                whisperVocalsHint.innerText = "¡Pista de voz disponible! Recomendado para mayor precisión.";
+                whisperVocalsHint.style.color = "var(--success)";
+            } else {
+                whisperUseVocals.disabled = true;
+                whisperUseVocals.checked = false;
+                whisperVocalsHint.innerText = "Mejora el timing al transcribir sin música de fondo. Requiere separar primero.";
+                whisperVocalsHint.style.color = "var(--text-muted)";
+            }
+        }
+
         // Si hay una tarea ejecutándose actualmente en backend, reconectar al log/polling
         checkCurrentTaskRunning();
 
@@ -543,8 +564,11 @@ async function handleInitProject(event) {
 async function startWhisper() {
     if (!currentProject) return;
 
+    const useVocalsInput = document.getElementById('whisper-use-vocals');
+    const useVocals = useVocalsInput ? useVocalsInput.checked : false;
+
     try {
-        const res = await fetch(`/api/run_whisper?project=${currentProject}`, { method: 'POST' });
+        const res = await fetch(`/api/run_whisper?project=${currentProject}&use_vocals=${useVocals}`, { method: 'POST' });
         const data = await res.json();
 
         if (data.error) {

@@ -994,8 +994,20 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
             
+            use_vocals = query.get('use_vocals', ['false'])[0] == 'true'
+            cfg['transcribe_from_vocals'] = use_vocals
+            try:
+                cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+            except Exception as e:
+                print(f"[WARNING] No se pudo guardar config.json al correr whisper: {e}")
+            
             # Obtener duración aproximada del MP3 para estimar el porcentaje (usando ffprobe si está disponible)
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
+            if use_vocals:
+                vocals_path = project_path / 'vocals.mp3'
+                if vocals_path.exists():
+                    audio_path = vocals_path
+                    
             total_duration = 200.0 # fallback por defecto (3:20 mins)
             try:
                 probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)]
