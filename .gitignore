@@ -62,7 +62,6 @@ audio_separator_models/
 */README.txt
 projects/
 
-
 # Rendered videos at root level (in case assembler writes here)
 *.mp4
 
