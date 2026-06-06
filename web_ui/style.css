@@ -695,6 +695,162 @@ h3 {
     text-overflow: ellipsis;
 }
 
+/* DELETE BUTTON FOR GALLERY IMAGES */
+.delete-image-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.85);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
+    z-index: 10;
+    transition: background var(--transition-speed);
+}
+
+.delete-image-btn:hover {
+    background: rgb(220, 38, 38);
+    box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
+
+/* SOLID COLOR THUMBNAIL PREVIEW */
+.solid-color-thumb-preview {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    font-size: 1.1rem;
+    box-sizing: border-box;
+}
+
+/* NO IMAGES NOTE */
+.no-images-note {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    margin-top: 5px;
+}
+
+/* VIDEO BACKGROUND STYLES */
+.video-item-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+    transition: var(--transition-speed);
+}
+
+.video-item-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.video-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.video-item-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.video-item-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.badge-video-source {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-base {
+    background: rgba(200, 144, 58, 0.15);
+    color: var(--accent-gold);
+    border: 1px solid rgba(200, 144, 58, 0.3);
+}
+
+.badge-loop {
+    background: rgba(0, 255, 180, 0.15);
+    color: var(--primary-neon);
+    border: 1px solid rgba(0, 255, 180, 0.3);
+}
+
+.video-sequence-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    color: var(--text-main);
+}
+
+.video-sequence-index {
+    font-weight: 700;
+    color: var(--accent-gold);
+    background: rgba(0,0,0,0.3);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
+.video-sequence-remove {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: bold;
+    font-size: 1rem;
+    line-height: 1;
+    transition: var(--transition-speed);
+}
+
+.video-sequence-remove:hover {
+    color: var(--error-red);
+}
+
+
 /* INTERACTIVE TIMELINE / MAP EDITOR (PASO 4) */
 .map-header {
     display: flex;

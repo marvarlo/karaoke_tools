@@ -387,6 +387,62 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             imgs.sort()
             return self.send_json({"images": imgs})
 
+        elif path == '/api/background_videos':
+            base_dir = WORKSPACE_DIR / 'base_videos'
+            loop_dir = WORKSPACE_DIR / 'loop_videos'
+            
+            video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+            
+            base_list = []
+            if base_dir.exists():
+                base_list = [f"base_videos/{p.name}" for p in base_dir.iterdir() if p.suffix.lower() in video_exts]
+                base_list.sort()
+                
+            loop_list = []
+            if loop_dir.exists():
+                loop_list = [f"loop_videos/{p.name}" for p in loop_dir.iterdir() if p.suffix.lower() in video_exts]
+                loop_list.sort()
+                
+            return self.send_json({
+                "base_videos": base_list,
+                "loop_videos": loop_list
+            })
+
+        elif path == '/api/video_file':
+            filepath_str = query.get('path', [''])[0]
+            if not filepath_str:
+                return self.send_error_json("Falta el parámetro 'path'")
+            
+            # Normalizar la ruta y verificar seguridad
+            resolved_path = (WORKSPACE_DIR / filepath_str).resolve()
+            
+            # Verificar que la ruta resuelta esté dentro de WORKSPACE_DIR
+            try:
+                resolved_path.relative_to(WORKSPACE_DIR)
+            except ValueError:
+                return self.send_error_json("Acceso no autorizado", 403)
+                
+            # Adicionalmente, verificar que pertenezca a base_videos o loop_videos
+            parts = resolved_path.relative_to(WORKSPACE_DIR).parts
+            if not parts or parts[0] not in ('base_videos', 'loop_videos'):
+                return self.send_error_json("Acceso no autorizado", 403)
+                
+            if not resolved_path.exists() or resolved_path.is_dir():
+                return self.send_error_json("Archivo no encontrado", 404)
+                
+            self.send_response(200)
+            self.send_header('Content-Type', 'video/mp4')
+            self.send_header('Content-Length', str(resolved_path.stat().st_size))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open(resolved_path, 'rb') as f:
+                while True:
+                    data = f.read(65536)
+                    if not data:
+                        break
+                    self.wfile.write(data)
+            return
+
         elif path == '/api/map':
             project_name = query.get('project', [''])[0]
             if not project_name:
@@ -725,6 +781,60 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 
             return self.send_json({"success": True, "filename": clean_name})
 
+        # ── SUBIR VIDEO (MULTIPART) ───────────────────────────────────────────
+        elif path == '/api/upload_video':
+            project_name = query.get('project', [''])[0]
+            if not project_name:
+                return self.send_error_json("Falta 'project'")
+                
+            form, files = parse_multipart_data(self.rfile, self.headers)
+            video_field = files.get('video')
+            
+            if not video_field or not video_field['content']:
+                return self.send_error_json("No se envió ningún video")
+                
+            filename = video_field['filename']
+            # Asegurar extensión válida
+            ext = Path(filename).suffix.lower()
+            if ext not in {'.mp4', '.mov', '.avi', '.mkv', '.webm'}:
+                return self.send_error_json("Formato de video no soportado (debe ser MP4, MOV, AVI, MKV o WEBM)")
+                
+            # Limpiar nombre
+            clean_name = Path(filename).stem
+            clean_name = "".join(c for c in clean_name if c.isalnum() or c in ('_', '-')) + ext
+            
+            loop_videos_dir = WORKSPACE_DIR / 'loop_videos'
+            loop_videos_dir.mkdir(exist_ok=True)
+            
+            dest = loop_videos_dir / clean_name
+            with open(dest, 'wb') as f:
+                f.write(video_field['content'])
+                
+            return self.send_json({"success": True, "filename": f"loop_videos/{clean_name}"})
+
+        # ── ELIMINAR IMAGEN ───────────────────────────────────────────────────
+        elif path == '/api/delete_image':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+            
+            project_name = data.get('project')
+            filename = data.get('file')
+            
+            if not project_name or not filename:
+                return self.send_error_json("Parámetros incorrectos")
+                
+            project_path = WORKSPACE_DIR / project_name
+            img_file = project_path / 'images' / filename
+            if img_file.exists() and img_file.is_file():
+                try:
+                    img_file.unlink()
+                    return self.send_json({"success": True})
+                except Exception as e:
+                    return self.send_error_json(f"Error al eliminar imagen: {str(e)}")
+            else:
+                return self.send_error_json("Imagen no encontrada")
+
         # ── GUARDAR MAPA (JSON) ───────────────────────────────────────────────
         elif path == '/api/map':
             content_length = int(self.headers.get('Content-Length', 0))
@@ -1002,6 +1112,11 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 
             if cfg.get('show_title') and cfg.get('title'):
                 cmd += ['--title', cfg['title']]
+
+            if cfg.get('background_type') == 'video':
+                cmd += ['--background-type', 'video']
+                if cfg.get('video_backgrounds'):
+                    cmd += ['--video-bg', ','.join(cfg.get('video_backgrounds'))]
                 
             if preview:
                 cmd.append('--preview')

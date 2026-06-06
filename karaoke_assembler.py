@@ -96,13 +96,13 @@ except ImportError:
 
 STYLES = {
     'minimal': dict(active=(200,144,58), sung=(244,239,230), unsung=(70,70,70),
-                    adj=(45,42,38), bg=0.68, overlay=110),
+                    adj=(45,42,38), bg=0.68, overlay=110, bg_color=(15,15,15)),
     'dark':    dict(active=(255,205,90), sung=(215,215,195), unsung=(55,55,55),
-                    adj=(28,28,28), bg=0.48, overlay=165),
+                    adj=(28,28,28), bg=0.48, overlay=165, bg_color=(10,10,10)),
     'neon':    dict(active=(0,255,180),  sung=(175,175,255), unsung=(65,65,65),
-                    adj=(30,30,30), bg=0.35, overlay=185),
+                    adj=(30,30,30), bg=0.35, overlay=185, bg_color=(5,5,10)),
     'vintage': dict(active=(255,215,125),sung=(240,218,182), unsung=(95,85,62),
-                    adj=(55,50,38), bg=0.65, overlay=125),
+                    adj=(55,50,38), bg=0.65, overlay=125, bg_color=(30,24,18)),
 }
 C_ACTIVE   = STYLES['minimal']['active']
 C_SUNG     = STYLES['minimal']['sung']
@@ -111,6 +111,7 @@ C_ADJACENT = STYLES['minimal']['adj']
 C_SHADOW   = (0, 0, 0)
 OVERLAY_A  = STYLES['minimal']['overlay']
 BG_BRIGHT  = STYLES['minimal']['bg']
+C_BG_COLOR = STYLES['minimal']['bg_color']
 
 
 # ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -285,27 +286,34 @@ SUPPORTED = {'.png', '.jpg', '.jpeg', '.webp'}
 
 
 def discover_images(folder: str) -> List[Path]:
-    return sorted(p for p in Path(folder).iterdir() if p.suffix.lower() in SUPPORTED)
+    p_folder = Path(folder)
+    if not p_folder.exists() or not p_folder.is_dir():
+        return []
+    return sorted(p for p in p_folder.iterdir() if p.suffix.lower() in SUPPORTED)
 
 
 def load_map(map_path: Optional[str], images_dir: str, total: float) -> list:
     """Carga el mapa JSON o genera uno automático dividiendo el tiempo equitativamente."""
     if map_path and Path(map_path).exists():
-        d = json.loads(Path(map_path).read_text(encoding='utf-8'))
-        segments = d['segments']
-        # Asegurar que todas las rutas de imagen sean relativas a images_dir o absolutas
-        for seg in segments:
-            img_path = Path(seg['image'])
-            # Si la ruta no existe directamente, intentar resolverla dentro de images_dir
-            if not img_path.exists():
-                resolved = Path(images_dir) / img_path.name
-                if resolved.exists():
-                    seg['image'] = str(resolved)
-        return segments
+        try:
+            d = json.loads(Path(map_path).read_text(encoding='utf-8'))
+            segments = d['segments']
+            # Asegurar que todas las rutas de imagen sean relativas a images_dir o absolutas
+            for seg in segments:
+                img_path = Path(seg['image'])
+                # Si la ruta no existe directamente, intentar resolverla dentro de images_dir
+                if not img_path.exists() and seg['image'] != 'solid':
+                    resolved = Path(images_dir) / img_path.name
+                    if resolved.exists():
+                        seg['image'] = str(resolved)
+            return segments
+        except Exception as e:
+            print(f"[WARNING] Error al leer mapa {map_path}, usando auto-map: {e}")
 
     imgs = discover_images(images_dir)
     if not imgs:
-        raise FileNotFoundError(f"No se encontraron imágenes en '{images_dir}'")
+        print("    Auto-map: Sin imágenes de fondo. Renderizando con fondo sólido.")
+        return [{"start": 0.0, "end": total, "image": "solid"}]
 
     n    = len(imgs)
     step = total / n
@@ -319,11 +327,23 @@ def get_bg(t: float, segments: list, cache: dict, size: tuple) -> Image.Image:
     Usa el segmento cuyo start sea menor o igual a t (último que empezó antes de t).
     Fallback: primer segmento para t < primer_segmento.start.
     """
+    if not segments:
+        key = "solid"
+        if key not in cache:
+            cache[key] = Image.new('RGB', size, C_BG_COLOR)
+        return cache[key].copy()
+
     # Selecciona el último segmento que haya empezado antes o en t
     path = segments[0]['image']   # fallback = primer segmento (cubre intro)
     for seg in sorted(segments, key=lambda s: s['start']):
         if seg['start'] <= t:
             path = seg['image']   # sigue actualizando — gana el último válido
+
+    if path == "solid" or not path or not Path(path).exists() or Path(path).is_dir():
+        key = f"solid_{C_BG_COLOR}"
+        if key not in cache:
+            cache[key] = Image.new('RGB', size, C_BG_COLOR)
+        return cache[key].copy()
 
     if path not in cache:
         raw = Image.open(path).convert('RGB').resize(size, Image.LANCZOS)
@@ -465,7 +485,10 @@ def render_frame(state: State, bg: Image.Image,
         )
         img_rgba = bg.convert('RGBA')
         img_rgba = Image.alpha_composite(img_rgba, overlay)
-        img  = img_rgba.convert('RGB')
+        if bg.mode == 'RGBA':
+            img = img_rgba
+        else:
+            img = img_rgba.convert('RGB')
         draw = ImageDraw.Draw(img)
 
     # Posiciones verticales
@@ -546,35 +569,36 @@ def load_font(user_path: Optional[str], size: int):
 # ── Template de mapa ──────────────────────────────────────────────────────────
 
 def generate_map(images_dir: str, words: List[Word], lines: List[Line], out: str):
-    """Genera un karaoke_map.json con puntos de corte sugeridos."""
+    """Genera un karaoke_map.json dividiendo la duración equitativamente por el número de imágenes."""
     imgs  = discover_images(images_dir)
     total = words[-1].end + 2.0
-    n     = len(lines)
-
-    # Puntos de corte naturales basados en gaps grandes entre líneas
-    gaps = []
-    for i in range(1, len(lines)):
-        g = lines[i].start - lines[i-1].end
-        gaps.append((g, lines[i-1].end, lines[i].start, i))
-    gaps.sort(reverse=True)
-
-    # Tomar los 4 gaps más grandes como separadores de sección
-    break_pts = sorted([0] + [g[1] for g in gaps[:4]] + [total])
+    n = len(imgs)
 
     segs = []
-    for i, (t0, t1) in enumerate(zip(break_pts, break_pts[1:])):
+    if n == 0:
         segs.append({
-            "start": round(t0, 2),
-            "end":   round(t1, 2),
-            "image": str(imgs[i]) if i < len(imgs) else f"fondos/imagen_{i+1:02d}.png",
-            "_label": f"sección {i+1}"
+            "start": 0.0,
+            "end":   round(total, 2),
+            "image": "solid",
+            "_label": "Fondo Sólido"
         })
+    else:
+        step = total / n
+        for i in range(n):
+            t0 = i * step
+            t1 = (i + 1) * step if i < n - 1 else total
+            segs.append({
+                "start": round(t0, 2),
+                "end":   round(t1, 2),
+                "image": str(imgs[i]),
+                "_label": f"sección {i+1}"
+            })
 
     template = {
         "_instrucciones": [
             "Edita el campo 'image' de cada segmento para apuntar a tu imagen de fondo.",
             "Ajusta 'start' y 'end' en segundos según necesites.",
-            "Los puntos de corte se detectaron en los gaps instrumentales más largos."
+            "Tiempos distribuidos equitativamente por el número de imágenes."
         ],
         "title":          "Reencuentro",
         "total_duration": round(total, 2),
@@ -666,15 +690,22 @@ def main():
                     help='Carpeta para guardar frames (default: temporal auto-limpiada)')
     ap.add_argument('--config',       default=None,
                     help='Ruta al archivo config.json para colores personalizados')
+    ap.add_argument('--background-type', default='image',
+                    choices=['image', 'video'],
+                    help='Tipo de fondo: image o video')
+    ap.add_argument('--video-bg',     default=None,
+                    help='Lista de videos de fondo separados por comas')
 
     args = ap.parse_args()
 
     # ── Validaciones básicas ─────────────────────────────────────────────────
     check_ffmpeg()
 
-    if not Path(args.images).is_dir():
-        print(f"❌  Carpeta de imágenes no encontrada: {args.images}")
-        sys.exit(1)
+    # Crear carpeta de imágenes si no existe, para evitar fallos si no se usan fondos
+    images_path = Path(args.images)
+    if not images_path.exists():
+        images_path.mkdir(parents=True, exist_ok=True)
+
     if not Path(args.srt).exists():
         print(f"❌  SRT no encontrado: {args.srt}")
         sys.exit(1)
@@ -685,7 +716,7 @@ def main():
     W, H = map(int, args.resolution.split('x'))
 
     # ── Aplicar estilo ────────────────────────────────────────────────────────
-    global C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT
+    global C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT, C_BG_COLOR
     st = STYLES.get(args.style, STYLES['minimal']).copy()
     
     if args.config:
@@ -703,11 +734,12 @@ def main():
                         if 'adj' in cc: st['adj'] = tuple(cc['adj'])
                         if 'bg' in cc: st['bg'] = float(cc['bg'])
                         if 'overlay' in cc: st['overlay'] = int(cc['overlay'])
+                        if 'bg_color' in cc: st['bg_color'] = tuple(cc['bg_color'])
         except Exception as e:
             print(f"[WARNING] No se pudo leer custom_colors de config: {e}")
 
-    C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT = (
-        st['active'], st['sung'], st['unsung'], st['adj'], st['overlay'], st['bg'])
+    C_ACTIVE, C_SUNG, C_UNSUNG, C_ADJACENT, OVERLAY_A, BG_BRIGHT, C_BG_COLOR = (
+        st['active'], st['sung'], st['unsung'], st['adj'], st['overlay'], st['bg'], st.get('bg_color', (15, 15, 15)))
     print(f"\n🎨  Estilo: {args.style} | Modo: {args.mode}")
     print(f"\n📄  Leyendo SRT: {args.srt}")
     words = parse_srt(args.srt)
@@ -786,7 +818,11 @@ def main():
             if dur < 0.005:
                 continue
 
-            bg    = get_bg(state.t_start, img_map, img_cache, (W, H))
+            if args.background_type == 'video':
+                bg = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+            else:
+                bg = get_bg(state.t_start, img_map, img_cache, (W, H))
+
             frame = render_frame(state, bg, fmain, fside, W, H, args.title)
 
             fp = frames_path / f'f{i:05d}.png'
@@ -810,18 +846,115 @@ def main():
         return fl_path
 
     # ── Ensamblaje ────────────────────────────────────────────────────────────
-    if args.frames_dir:
-        # Guardar frames permanentemente (útil para debugging)
-        fp_dir    = Path(args.frames_dir)
-        fl_path   = do_render(fp_dir)
-        print(f"\n🎬  Ensamblando video...")
-        run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose)
+    if args.background_type == 'video':
+        if not args.video_bg:
+            print("❌ Error: Se seleccionó modo video de fondo pero no se especificó ningún video (--video-bg).")
+            sys.exit(1)
+            
+        selected_videos = []
+        for p in args.video_bg.split(','):
+            p = p.strip()
+            if not p:
+                continue
+            path = Path(p)
+            if path.exists():
+                selected_videos.append(path.resolve())
+            else:
+                path = Path(__file__).parent / p
+                if path.exists():
+                    selected_videos.append(path.resolve())
+                else:
+                    print(f"⚠️ Advertencia: El video de fondo no existe: {p}")
+                    
+        if not selected_videos:
+            print("❌ Error: Ninguno de los videos de fondo especificados existe.")
+            sys.exit(1)
+
+        def assemble_video_bg(frames_path: Path):
+            fl_path = do_render(frames_path)
+            
+            temp_seq = frames_path / 'temp_sequence.mp4'
+            print(f"\n⚙️ Creando secuencia de fondo con {len(selected_videos)} videos...")
+            
+            concat_cmd = ['ffmpeg', '-y']
+            for v in selected_videos:
+                concat_cmd += ['-i', str(v)]
+            
+            filter_complex = ""
+            concat_inputs = ""
+            for idx, v in enumerate(selected_videos):
+                filter_complex += f"[{idx}:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1[v{idx}];"
+                concat_inputs += f"[v{idx}]"
+            filter_complex += f"{concat_inputs}concat=n={len(selected_videos)}:v=1:a=0[outv]"
+            
+            concat_cmd += [
+                '-filter_complex', filter_complex,
+                '-map', '[outv]',
+                '-c:v', 'libx264',
+                '-preset', 'fast', '-crf', '20',
+                str(temp_seq)
+            ]
+            
+            r_concat = subprocess.run(concat_cmd, capture_output=True, text=True)
+            if r_concat.returncode != 0:
+                print(f"❌ Error al concatenar videos de fondo:\n{r_concat.stderr}")
+                sys.exit(1)
+                
+            seq_duration = 5.0
+            try:
+                probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(temp_seq)]
+                res = subprocess.run(probe_cmd, capture_output=True, text=True)
+                if res.returncode == 0:
+                    seq_duration = float(res.stdout.strip())
+            except Exception as e:
+                print(f"[WARNING] No se pudo obtener la duración de temp_sequence.mp4, usando 5s por defecto: {e}")
+                
+            import math
+            loop_count = int(math.ceil(total_dur / seq_duration)) - 1
+            if loop_count < 0:
+                loop_count = 0
+                
+            print(f"    Secuencia base de fondo: {seq_duration:.2f}s. Loops necesarios: {loop_count + 1}")
+            print(f"🎬 Ensamblando video final con overlay transparente...")
+            
+            final_cmd = [
+                'ffmpeg', '-y',
+                '-stream_loop', str(loop_count), '-i', str(temp_seq),
+                '-f', 'concat', '-safe', '0', '-i', str(fl_path),
+                '-i', args.audio,
+                '-filter_complex', '[0:v][1:v]overlay=0:0:shortest=1[outv]',
+                '-map', '[outv]',
+                '-map', '2:a',
+                '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+                '-c:a', 'aac', '-b:a', '192k',
+                '-shortest',
+                args.output
+            ]
+            
+            if args.verbose:
+                subprocess.run(final_cmd, check=True)
+            else:
+                r = subprocess.run(final_cmd, capture_output=True, text=True)
+                if r.returncode != 0:
+                    print(f"\n❌ FFmpeg overlay error:\n{r.stderr[-3000:]}")
+                    sys.exit(1)
+
+        if args.frames_dir:
+            assemble_video_bg(Path(args.frames_dir))
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                assemble_video_bg(Path(tmp))
     else:
-        # Carpeta temporal auto-limpiada
-        with tempfile.TemporaryDirectory() as tmp:
-            fl_path = do_render(Path(tmp))
-            print(f"\n🎬  Ensamblando video con FFmpeg...")
+        if args.frames_dir:
+            fp_dir    = Path(args.frames_dir)
+            fl_path   = do_render(fp_dir)
+            print(f"\n🎬  Ensamblando video...")
             run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                fl_path = do_render(Path(tmp))
+                print(f"\n🎬  Ensamblando video con FFmpeg...")
+                run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose)
 
     # ── Resultado ─────────────────────────────────────────────────────────────
     out_path = Path(args.output)
