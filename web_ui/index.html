@@ -206,40 +206,85 @@
                 </div>
             </section>
 
-            <!-- STEP 2: WHISPER TRANSCRIPTION -->
+            <!-- STEP 2: WHISPER TRANSCRIPTION & SEPARATION -->
             <section class="wizard-step" id="step-2">
-                <div class="glass-card text-center">
-                    <h2><span class="gold-text">Paso 2:</span> Transcripción por Palabra con Whisper</h2>
-                    <p class="step-desc">Utilizaremos OpenAI Whisper para escuchar tu audio y generar el timing exacto de cada palabra.</p>
+                <div class="glass-card">
+                    <h2 class="text-center"><span class="gold-text">Paso 2:</span> Transcripción y Separación de Audio</h2>
+                    <p class="step-desc text-center">Genera la sincronización de letra por palabra usando Whisper y aísla la pista instrumental mediante IA.</p>
                     
-                    <div class="transcription-trigger-container">
-                        <button class="glow-button success large-btn" id="run-whisper-btn" onclick="startWhisper()">
-                            🔥 Iniciar Transcripción con Whisper
-                        </button>
-                    </div>
+                    <div class="step-grid-2col">
+                        <!-- Columna Izquierda: Whisper -->
+                        <div class="glass-panel text-center" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <h3>🗣️ Sincronización con Whisper</h3>
+                                <p class="step-desc">Escucha el audio del proyecto y genera el timing exacto de cada palabra.</p>
+                                
+                                <div class="transcription-trigger-container" style="margin: 20px 0;">
+                                    <button class="glow-button success large-btn" id="run-whisper-btn" onclick="startWhisper()">
+                                        🔥 Iniciar Transcripción Whisper
+                                    </button>
+                                </div>
 
-                    <div class="progress-bar-container">
-                        <div class="progress-bar-label">
-                            <span id="transcription-status-text">Estado: En espera</span>
-                            <span id="transcription-progress-pct">0%</span>
-                        </div>
-                        <div class="progress-track">
-                            <div class="progress-fill" id="transcription-progress-fill"></div>
-                        </div>
-                    </div>
+                                <div class="progress-bar-container" style="margin-bottom: 20px;">
+                                    <div class="progress-bar-label">
+                                        <span id="transcription-status-text">Estado: En espera</span>
+                                        <span id="transcription-progress-pct">0%</span>
+                                    </div>
+                                    <div class="progress-track">
+                                        <div class="progress-fill" id="transcription-progress-fill"></div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div class="terminal-container">
-                        <div class="terminal-header">
-                            <span class="terminal-dot red"></span>
-                            <span class="terminal-dot yellow"></span>
-                            <span class="terminal-dot green"></span>
-                            <span class="terminal-title">Consola de Whisper (Timing)</span>
-                        </div>
-                        <pre class="terminal-body" id="whisper-console-output">Listo para transcribir. Presiona el botón para iniciar.
+                            <div class="terminal-container" style="margin-top: auto;">
+                                <div class="terminal-header">
+                                    <span class="terminal-dot red"></span>
+                                    <span class="terminal-dot yellow"></span>
+                                    <span class="terminal-dot green"></span>
+                                    <span class="terminal-title">Consola de Whisper (Timing)</span>
+                                </div>
+                                <pre class="terminal-body" id="whisper-console-output" style="max-height: 150px; overflow-y: auto;">Listo para transcribir. Presiona el botón para iniciar.
 La primera vez que uses un modelo, tomará unos minutos en descargarse automáticamente.</pre>
+                            </div>
+                        </div>
+
+                        <!-- Columna Derecha: Separación de Audio -->
+                        <div class="glass-panel text-center" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <h3>⚡ Separación de Audio por IA</h3>
+                                <p class="step-desc" id="separator-status-desc">Cargando estado...</p>
+                                
+                                <div class="separator-trigger-container" style="margin: 20px 0;">
+                                    <button class="glow-button primary large-btn" id="run-separator-btn" onclick="startSeparator()">
+                                        ⚡ Iniciar Separación de Audio
+                                    </button>
+                                </div>
+
+                                <div class="progress-bar-container" style="margin-bottom: 20px;">
+                                    <div class="progress-bar-label">
+                                        <span id="separator-status-text">Estado: En espera</span>
+                                        <span id="separator-progress-pct">0%</span>
+                                    </div>
+                                    <div class="progress-track">
+                                        <div class="progress-fill" id="separator-progress-fill"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="terminal-container" style="margin-top: auto;">
+                                <div class="terminal-header">
+                                    <span class="terminal-dot red"></span>
+                                    <span class="terminal-dot yellow"></span>
+                                    <span class="terminal-dot green"></span>
+                                    <span class="terminal-title">Consola de Separación (RoFormer)</span>
+                                </div>
+                                <pre class="terminal-body" id="separator-console-output" style="max-height: 150px; overflow-y: auto;">Listo para separar audio. Presiona el botón para iniciar.
+El modelo RoFormer se descargará y procesará el audio para generar la instrumental.</pre>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- EDITOR DE LETRAS Y TIMINGS (NUEVO) -->
+                    <!-- EDITOR DE LETRAS Y TIMINGS -->
                     <div id="lyrics-editor-card" class="glass-panel" style="display:none; text-align: left; margin-top: 30px; padding: 25px;">
                         <div class="map-header" style="margin-bottom: 20px;">
                             <div>

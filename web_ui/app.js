@@ -325,6 +325,19 @@ async function handleProjectChange(projectName) {
             audioUploadLabel.innerText = "Arrastra tu MP3 aquí o haz click para explorar";
         }
 
+        // Actualizar UI del Separador
+        const runSeparatorBtn = document.getElementById('run-separator-btn');
+        const separatorStatusDesc = document.getElementById('separator-status-desc');
+        if (runSeparatorBtn && separatorStatusDesc) {
+            if (projectStatus.instrumental_exists) {
+                runSeparatorBtn.innerText = "⚡ Re-separar Audio";
+                separatorStatusDesc.innerHTML = "Pista instrumental lista 🎸<br><small style='color: var(--success);'>El modo Karaoke usará la instrumental aislada.</small>";
+            } else {
+                runSeparatorBtn.innerText = "⚡ Iniciar Separación de Audio";
+                separatorStatusDesc.innerHTML = "Pista instrumental no disponible.<br><small style='color: var(--text-muted);'>Se usará el audio original con voces si compilas ahora.</small>";
+            }
+        }
+
         // Si hay una tarea ejecutándose actualmente en backend, reconectar al log/polling
         checkCurrentTaskRunning();
 
@@ -546,6 +559,26 @@ async function startWhisper() {
     }
 }
 
+async function startSeparator() {
+    if (!currentProject) return;
+
+    try {
+        const res = await fetch(`/api/run_separator?project=${currentProject}`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.error) {
+            showToast(data.error, "error");
+        } else {
+            showToast("Separador RoFormer iniciado en segundo plano...", "warning");
+            const runSeparatorBtn = document.getElementById('run-separator-btn');
+            if (runSeparatorBtn) runSeparatorBtn.disabled = true;
+            pollStatus();
+        }
+    } catch (e) {
+        showToast("Error al iniciar la separación de audio", "error");
+    }
+}
+
 function pollStatus() {
     clearInterval(statusInterval);
 
@@ -578,6 +611,33 @@ function pollStatus() {
                     clearInterval(statusInterval);
                     showToast("La transcripción de Whisper falló. Revisa la consola.", "error");
                     document.getElementById('run-whisper-btn').disabled = false;
+                }
+            } else if (data.task === 'separator') {
+                const sepConsole = document.getElementById('separator-console-output');
+                const sepProgressFill = document.getElementById('separator-progress-fill');
+                const sepProgressPct = document.getElementById('separator-progress-pct');
+                const sepStatusText = document.getElementById('separator-status-text');
+
+                if (sepStatusText && sepProgressPct && sepProgressFill && sepConsole) {
+                    sepStatusText.innerText = `Estado: Separando (${data.status})`;
+                    sepProgressPct.innerText = `${data.progress}%`;
+                    sepProgressFill.style.width = `${data.progress}%`;
+                    sepConsole.innerText = data.logs || "Ejecutando separación de audio...";
+                    sepConsole.scrollTop = sepConsole.scrollHeight;
+                }
+
+                if (data.status === 'success') {
+                    clearInterval(statusInterval);
+                    showToast("¡Separación de audio completada con éxito!");
+                    const runSeparatorBtn = document.getElementById('run-separator-btn');
+                    if (runSeparatorBtn) runSeparatorBtn.disabled = false;
+                    handleProjectChange(currentProject);
+                } else if (data.status === 'failed') {
+                    clearInterval(statusInterval);
+                    showToast("La separación de audio falló. Revisa la consola.", "error");
+                    const runSeparatorBtn = document.getElementById('run-separator-btn');
+                    if (runSeparatorBtn) runSeparatorBtn.disabled = false;
+                    handleProjectChange(currentProject);
                 }
             } else if (data.task === 'assembler') {
                 // Polling para renderizado del paso 5
@@ -616,6 +676,9 @@ async function checkCurrentTaskRunning() {
             pollStatus();
             if (data.task === 'whisper') {
                 document.getElementById('run-whisper-btn').disabled = true;
+            } else if (data.task === 'separator') {
+                const runSeparatorBtn = document.getElementById('run-separator-btn');
+                if (runSeparatorBtn) runSeparatorBtn.disabled = true;
             }
         }
     } catch (e) {

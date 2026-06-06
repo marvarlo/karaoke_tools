@@ -154,13 +154,14 @@ class TaskManager:
                     self.append_log(project_name, line)
                     
                     # Intentar parsear progreso
-                    if task_type == 'assembler':
-                        # Formato: [██████░░░░]  60.5%  180/300
+                    if task_type in ('assembler', 'separator'):
+                        # Formato: [██████░░░░]  60.5%  180/300 or tqdm bar
                         if '%' in line:
                             try:
                                 parts = line.split('%')[0].split()
                                 if parts:
-                                    pct = float(parts[-1])
+                                    val = parts[-1].strip('[ ')
+                                    pct = float(val)
                                     self.update_progress(project_name, int(pct))
                             except Exception:
                                 pass
@@ -361,6 +362,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 "config": config,
                 "status": {
                     "audio_exists": audio_file.exists(),
+                    "instrumental_exists": (project_path / "instrumental.mp3").exists(),
                     "images_count": len(images_list),
                     "words_json_exists": (out_dir / 'words.json').exists(),
                     "words_srt_exists": (out_dir / 'words.srt').exists(),
@@ -943,6 +945,42 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send_error_json(f"Error al guardar letras: {str(e)}")
 
+        # ── EJECUTAR SEPARADOR ────────────────────────────────────────────────
+        elif path == '/api/run_separator':
+            project_name = query.get('project', [''])[0]
+            if not project_name:
+                return self.send_error_json("Falta 'project'")
+                
+            project_path = WORKSPACE_DIR / project_name
+            cfg_file = project_path / 'config.json'
+            if not cfg_file.exists():
+                return self.send_error_json("Proyecto no encontrado")
+                
+            cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+            audio_path = project_path / cfg.get('audio', 'audio.mp3')
+            
+            # Limpiar pistas anteriores si existen
+            instrumental_file = project_path / 'instrumental.mp3'
+            vocals_file = project_path / 'vocals.mp3'
+            if instrumental_file.exists():
+                try: instrumental_file.unlink()
+                except Exception: pass
+            if vocals_file.exists():
+                try: vocals_file.unlink()
+                except Exception: pass
+                
+            # Comando: python.exe karaoke_separator.py <audio_path> <project_path>
+            cmd = [
+                str(VENV_PYTHON),
+                str(WORKSPACE_DIR / 'karaoke_separator.py'),
+                str(audio_path),
+                str(project_path)
+            ]
+            
+            # Ejecutar tarea asíncrona de tipo 'separator'
+            task_manager.run_command_async(project_name, cmd, 'separator')
+            return self.send_json({"success": True})
+
         # ── EJECUTAR WHISPER ──────────────────────────────────────────────────
         elif path == '/api/run_whisper':
             project_name = query.get('project', [''])[0]
@@ -1075,6 +1113,11 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 print(f"[WARNING] No se pudo guardar config.json al renderizar: {e}")
                 
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
+            if mode == 'karaoke':
+                instrumental_path = project_path / 'instrumental.mp3'
+                if instrumental_path.exists():
+                    audio_path = instrumental_path
+                    
             words_srt = project_path / 'output' / 'words.srt'
             words_json = project_path / 'output' / 'words.json'
             map_json = project_path / 'output' / 'map.json'
