@@ -1159,7 +1159,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     if status["status"] == "success":
                         # Whisper de por sí genera '<audio_stem>_words.json'
                         # Renombrarlo a words.json y words.srt
-                        stem = Path(cfg.get('audio', 'audio.mp3')).stem
+                        stem = Path(audio_path).stem
                         gen_json = project_path / 'output' / f"{stem}_words.json"
                         gen_srt = project_path / 'output' / f"{stem}_words.srt"
                         

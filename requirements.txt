@@ -1,0 +1,20 @@
+# ── Core pipeline (karaoke_timing.py + karaoke_assembler.py) ──────────────────
+Pillow
+openai-whisper
+faster-whisper
+whisper-timestamped
+soundfile
+librosa
+
+# ── Audio separation (karaoke_separator.py) ───────────────────────────────────
+# audio-separator pulls diffq-fixed, which fails to build on Windows (missing
+# bitpack.pyx in the Cython source tarball). Install its real deps manually,
+# then install audio-separator with --no-deps to skip the broken one.
+#
+# Step 1 — real dependencies (audio-separator 0.44.2):
+#   pip install audioop-lts beartype einops julius ml_collections numpy \
+#       onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy \
+#       rotary-embedding-torch samplerate scipy six soundfile torch tqdm
+#
+# Step 2 — install the package itself without pulling diffq-fixed:
+#   pip install audio-separator --no-deps

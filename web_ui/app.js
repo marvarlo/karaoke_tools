@@ -1832,7 +1832,31 @@ function renderLyricsEditor() {
         const deleteSegBtn = document.createElement('button');
         deleteSegBtn.className = 'delete-segment-btn';
         deleteSegBtn.innerText = '🗑️ Eliminar';
-        deleteSegBtn.onclick = () => deleteSegment(segIdx);
+        deleteSegBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (deleteSegBtn.classList.contains('confirm-delete')) {
+                // Borrar el segmento
+                lyricsData.segments.splice(segIdx, 1);
+                // Re-indexar los IDs de segmentos para que sean continuos
+                lyricsData.segments.forEach((seg, idx) => {
+                    seg.id = idx;
+                    if (seg.words) {
+                        seg.words.forEach(w => w.segment_id = idx);
+                    }
+                });
+                renderLyricsEditor();
+                showToast(`Segmento ${segIdx + 1} eliminado de la interfaz. Guarda los cambios para persistir.`, "warning");
+            } else {
+                // Resetear otros botones primero
+                document.querySelectorAll('.delete-segment-btn').forEach(btn => {
+                    btn.classList.remove('confirm-delete');
+                    btn.innerText = '🗑️ Eliminar';
+                });
+                // Marcar este para confirmar
+                deleteSegBtn.classList.add('confirm-delete');
+                deleteSegBtn.innerText = '⚠️ ¿Confirmar?';
+            }
+        };
 
         header.appendChild(title);
         header.appendChild(deleteSegBtn);
@@ -1946,17 +1970,6 @@ function updateSegmentTimesFromWords(segIdx) {
     }
 }
 
-function deleteSegment(segIdx) {
-    if (!lyricsData || !lyricsData.segments) return;
-    if (confirm(`¿Estás seguro de que deseas eliminar por completo el segmento ${segIdx + 1}?`)) {
-        lyricsData.segments.splice(segIdx, 1);
-        // Re-indexar los IDs de segmentos para que sean continuos
-        lyricsData.segments.forEach((seg, idx) => {
-            seg.id = idx;
-        });
-        renderLyricsEditor();
-    }
-}
 
 function deleteWord(segIdx, wIdx) {
     if (!lyricsData || !lyricsData.segments[segIdx]) return;
@@ -2000,8 +2013,72 @@ function addWordToSegment(segIdx) {
     renderLyricsEditor();
 }
 
+function addSegmentManually() {
+    if (!lyricsData) {
+        lyricsData = { segments: [] };
+    }
+    if (!lyricsData.segments) {
+        lyricsData.segments = [];
+    }
+
+    let newStart = 0.0;
+    let newEnd = 2.0;
+
+    // Colocar después del último segmento existente, si hay alguno
+    if (lyricsData.segments.length > 0) {
+        const lastSeg = lyricsData.segments[lyricsData.segments.length - 1];
+        newStart = parseFloat((lastSeg.end + 1.0).toFixed(2));
+        newEnd = parseFloat((newStart + 2.0).toFixed(2));
+    }
+
+    const newSeg = {
+        id: lyricsData.segments.length,
+        start: newStart,
+        end: newEnd,
+        text: "Nueva sección",
+        words: [
+            {
+                word: "Nueva",
+                start: newStart,
+                end: parseFloat((newStart + 1.0).toFixed(2)),
+                confidence: 1.0
+            },
+            {
+                word: "sección",
+                start: parseFloat((newStart + 1.0).toFixed(2)),
+                end: newEnd,
+                confidence: 1.0
+            }
+        ]
+    };
+
+    lyricsData.segments.push(newSeg);
+    renderLyricsEditor();
+
+    // Scroll al final del contenedor para ver la nueva sección
+    setTimeout(() => {
+        const container = document.getElementById('lyrics-editor-list');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, 50);
+
+    showToast("Sección agregada al final de la lista.", "info");
+}
+
 async function saveLyricsData() {
     if (!currentProject || !lyricsData) return;
+
+    // Ordenar los segmentos por tiempo de inicio y re-indexar IDs antes de guardar
+    lyricsData.segments.sort((a, b) => (a.start || 0) - (b.start || 0));
+    lyricsData.segments.forEach((seg, idx) => {
+        seg.id = idx;
+        if (seg.words) {
+            seg.words.forEach(w => {
+                w.segment_id = idx;
+            });
+        }
+    });
 
     try {
         showToast("Guardando cambios de letras...", "warning");

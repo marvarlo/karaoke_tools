@@ -21,7 +21,7 @@ Una suite completa de herramientas locales en Python y una interfaz web moderna 
 - **🎨 Fondos Sólidos:** Soporte para renderizar con un color sólido extraído automáticamente de la paleta del estilo visual seleccionado si no se cargan fondos.
 
 ### 4. Separador de Audio Vocal/Instrumental (Extra)
-- **Alta Calidad de Aislamiento:** Script independiente (`karaoke_audio_separator.py`) que utiliza la biblioteca `audio-separator` y el modelo RoFormer (`model_bs_roformer_ep_317_sdr_12.9750.ckpt`) para extraer pistas vocales e instrumentales limpias a partir de cualquier archivo de música.
+- **Alta Calidad de Aislamiento:** Script independiente (`karaoke_separator.py`) que utiliza la biblioteca `audio-separator` y el modelo RoFormer (`model_bs_roformer_ep_317_sdr_12.9755.ckpt`) para extraer pistas vocales e instrumentales limpias a partir de cualquier archivo de música.
 
 ---
 
@@ -29,18 +29,38 @@ Una suite completa de herramientas locales en Python y una interfaz web moderna 
 
 ```text
 karaoke_tools/
-├── base_videos/              # Videos de fondo predeterminados cortos (5s)
-├── loop_videos/              # Catálogo de videos de fondo en bucle y subidas personalizadas
-├── web_ui/                   # Frontend del Wizard interactivo
-│   ├── index.html            # Interfaz de usuario estructurada en 5 pasos
-│   ├── style.css             # Estilos modernos con efectos de cristal y gradientes
-│   └── app.js                # Lógica del cliente, subidas, mapeos y control del backend
-├── .venv/                    # Entorno virtual de Python con dependencias instaladas
-├── karaoke_timing.py         # Script CLI para transcripción Whisper por palabras
-├── karaoke_assembler.py      # Motor CLI de renderizado y composición de video
-├── karaoke_web_server.py     # Servidor HTTP local con APIs REST
-├── karaoke_audio_separator.py# Script para separación de voz e instrumentos
-└── README.md                 # Este archivo informativo
+├── install/                      # Scripts de instalación
+│   ├── install.sh                #   Linux / macOS / Git Bash
+│   ├── install.bat               #   CMD de Windows
+│   └── install.ps1               #   PowerShell de Windows
+├── projects/                     # Proyectos de canciones (generado en runtime)
+│   └── <NombreProyecto>/         #   Una carpeta por canción
+│       ├── config.json           #     Configuración del proyecto
+│       ├── audio.mp3             #     Archivo de audio subido
+│       ├── vocals.mp3            #     Pista vocal (opcional, generada por el separador)
+│       ├── instrumental.mp3      #     Pista instrumental (opcional, generada por el separador)
+│       ├── images/               #     Imágenes de fondo del proyecto
+│       └── output/               #     Archivos generados
+│           ├── words.json        #       Transcripción completa
+│           ├── words.srt         #       Subtítulos por palabra
+│           ├── map.json          #       Mapa de imágenes por sección de tiempo
+│           └── *.mp4             #       Video(s) renderizado(s)
+├── base_images/                  # Imágenes de ejemplo incluidas en el repositorio
+├── base_videos/                  # Videos de fondo predeterminados cortos (5s)
+├── loop_videos/                  # Videos de fondo en bucle y subidas del usuario
+├── web_ui/                       # Frontend del Wizard interactivo
+│   ├── index.html                #   Interfaz estructurada en 5 pasos
+│   ├── style.css                 #   Estilos con efectos de cristal y gradientes
+│   └── app.js                    #   Lógica del cliente y control del backend
+├── /venv/                        # Entorno virtual de Python
+├── karaoke_web_server.py         # Servidor HTTP local con APIs REST
+├── karaoke_assembler.py          # Motor de renderizado y composición de video
+├── karaoke_timing.py             # Transcripción Whisper por palabras
+├── karaoke_separator.py          # Separación vocal/instrumental con RoFormer
+├── karaoke_maker.py              # Orquestador CLI (init/build/preview/info/clean)
+├── requirements.txt              # Dependencias del pipeline principal
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -53,18 +73,46 @@ karaoke_tools/
    - En Windows, descarga de [ffmpeg.org](https://ffmpeg.org/download.html) y agrega la carpeta `/bin` a tu variable PATH.
 
 ### Instalación de dependencias
-El entorno local se gestiona preferiblemente mediante `uv` o el gestor clásico `pip` activando el entorno virtual:
+
+``` powershell
+# Activar entorno virtual (Windows)
+venv\Scripts\Activate.ps1
+
+# Instalar dependencias del pipeline principal
+install\install.ps1
+```
+
+``` bash
+# Activar entorno virtual (Linux / macOS / Git Bash)
+source venv/bin/activate
+
+# Instalar dependencias del pipeline principal
+install/install.sh
+```
+
+``` CMD (Windows Command Prompt)
+# Activar entorno virtual CMD Windows Command Prompt
+venv\Scripts\Activate.bat
+
+# Instalar dependencias del pipeline principal
+install/install.bat
+```
+
+#### Separador de audio (opcional)
+
+`audio-separator` **no está incluido en `requirements.txt`** porque tiene una dependencia transitiva (`diffq-fixed`) que falla al compilar en Windows. Instálalo por separado usando `--no-deps`:
 
 ```powershell
-# Activar entorno virtual (Windows)
-.venv\Scripts\Activate.ps1
+# Paso 1 — instalar todas las dependencias reales (excepto la problemática)
+pip install audioop-lts beartype einops julius ml_collections numpy `
+    onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy `
+    rotary-embedding-torch samplerate scipy six soundfile torch tqdm
 
-# Instalar dependencias requeridas para timing y ensamblado
-pip install pillow faster-whisper whisper-timestamped soundfile librosa
-
-# Instalar dependencias para separación de audio (opcional)
-pip install audio-separator[gpu]  # O sin [gpu] si no dispones de tarjeta gráfica compatible
+# Paso 2 — instalar audio-separator sin dependencias (omite diffq-fixed)
+pip install audio-separator --no-deps
 ```
+
+> **¿Por qué `--no-deps`?** `diffq-fixed==0.2.4` es la única dependencia declarada que falla: intenta compilar extensiones Cython desde fuente pero su paquete no incluye el archivo `bitpack.pyx`. Instalando las demás dependencias manualmente en el Paso 1 y usando `--no-deps` en el Paso 2 se evita el problema por completo.
 
 ---
 

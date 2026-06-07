@@ -1155,6 +1155,16 @@ h3 {
     color: #ff6b6b;
 }
 
+.delete-segment-btn.confirm-delete {
+    background: rgba(244, 63, 94, 0.95) !important;
+    border-color: rgba(244, 63, 94, 1) !important;
+    color: #ffffff !important;
+}
+
+.delete-segment-btn.confirm-delete:hover {
+    background: rgb(225, 29, 72) !important;
+}
+
 .words-edit-container {
     display: flex;
     flex-wrap: wrap;
