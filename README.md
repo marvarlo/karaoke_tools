@@ -90,7 +90,7 @@ source venv/bin/activate
 install/install.sh
 ```
 
-```CMD (Windows Command Prompt)
+``` CMD (Windows Command Prompt)
 # Activar entorno virtual CMD Windows Command Prompt
 venv\Scripts\Activate.bat
 

@@ -304,6 +304,8 @@ async function handleProjectChange(projectName) {
         } else {
             if (imgSection) imgSection.style.display = 'block';
             if (vidSection) vidSection.style.display = 'none';
+            // Cargar la biblioteca de imágenes base
+            loadBaseImages();
         }
 
         // Cargar editor de letras si ya está transcribido
@@ -715,11 +717,13 @@ async function checkCurrentTaskRunning() {
 // ──────────────────────────────────────────────────────────────────────────────
 function updateImagesGallery() {
     const gallery = document.getElementById('images-gallery');
-    const galleryCount = document.getElementById('gallery-count');
-    galleryCount.innerText = projectImages.length;
+    const badge = document.getElementById('gallery-count-badge');
+    if (badge) badge.innerText = `${projectImages.length} imagen${projectImages.length !== 1 ? 'es' : ''}`;
 
     if (projectImages.length === 0) {
-        gallery.innerHTML = '<div class="gallery-empty-message">Aún no has subido imágenes. ¡Arrastra archivos arriba!</div>';
+        gallery.innerHTML = '<div class="gallery-empty-message">Agrega imágenes de la biblioteca de abajo o sube las tuyas propias. ¡Arrástralas aquí!</div>';
+        // Actualizar estado "ya agregada" en la biblioteca base (si está cargada)
+        refreshBaseImagesAddedState();
         return;
     }
 
@@ -731,6 +735,7 @@ function updateImagesGallery() {
         const img = document.createElement('img');
         img.src = `/api/image_file?project=${currentProject}&file=${imgName}`;
         img.alt = imgName;
+        img.loading = 'lazy';
 
         const label = document.createElement('div');
         label.className = 'gallery-item-name';
@@ -749,6 +754,181 @@ function updateImagesGallery() {
         item.appendChild(label);
         item.appendChild(deleteBtn);
         gallery.appendChild(item);
+    });
+
+    // Actualizar estado "ya agregada" en la biblioteca base
+    refreshBaseImagesAddedState();
+}
+
+// Variable de control para no recargar innecesariamente la biblioteca base
+let baseImagesData = null;
+
+async function loadBaseImages() {
+    try {
+        const res = await fetch('/api/base_images');
+        const data = await res.json();
+        baseImagesData = data;
+
+        // Rellenar el filtro de colecciones
+        const collectionFilter = document.getElementById('base-images-collection-filter');
+        if (collectionFilter) {
+            collectionFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                collectionFilter.appendChild(opt);
+            });
+        }
+
+        // Actualizar badge de conteo
+        const countBadge = document.getElementById('base-images-count-badge');
+        if (countBadge) countBadge.innerText = `${data.images.length} imágenes`;
+
+        // Renderizar la cuadrícula
+        renderBaseImagesGrid(data.images);
+    } catch (e) {
+        console.error('Error al cargar imágenes base:', e);
+        const grid = document.getElementById('base-images-grid');
+        if (grid) grid.innerHTML = '<div class="gallery-empty-message">Error al cargar la biblioteca.</div>';
+    }
+}
+
+function renderBaseImagesGrid(images) {
+    const grid = document.getElementById('base-images-grid');
+    if (!grid) return;
+
+    if (!images || images.length === 0) {
+        grid.innerHTML = '<div class="gallery-empty-message">No hay imágenes disponibles.</div>';
+        return;
+    }
+
+    grid.innerHTML = '';
+    images.forEach(imgObj => {
+        const card = createBaseImageCard(imgObj);
+        grid.appendChild(card);
+    });
+}
+
+function createBaseImageCard(imgObj) {
+    const isAdded = projectImages.includes(imgObj.filename);
+
+    const card = document.createElement('div');
+    card.className = 'base-image-card' + (isAdded ? ' already-added' : '');
+    card.dataset.filename = imgObj.filename;
+    card.dataset.collection = imgObj.collection;
+
+    // Miniatura
+    const img = document.createElement('img');
+    img.src = `/api/base_image_file?filename=${encodeURIComponent(imgObj.filename)}`;
+    img.alt = imgObj.filename;
+    img.loading = 'lazy';
+
+    // Badge de colección
+    const colBadge = document.createElement('span');
+    colBadge.className = 'base-img-collection-badge';
+    colBadge.innerText = imgObj.collection;
+
+    // Overlay de acción (aparece en hover)
+    const overlay = document.createElement('div');
+    overlay.className = 'base-img-overlay';
+
+    if (isAdded) {
+        overlay.innerHTML = '<span class="base-img-added-check">✅ Ya en proyecto</span>';
+    } else {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'base-img-add-btn';
+        addBtn.innerText = '➕ Agregar';
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            copyBaseImageToProject(imgObj.filename);
+        };
+        overlay.appendChild(addBtn);
+    }
+
+    // Nombre del archivo
+    const nameLabel = document.createElement('div');
+    nameLabel.className = 'base-img-name';
+    nameLabel.innerText = imgObj.filename;
+    nameLabel.title = imgObj.filename;
+
+    card.appendChild(img);
+    card.appendChild(colBadge);
+    card.appendChild(overlay);
+    card.appendChild(nameLabel);
+
+    return card;
+}
+
+async function copyBaseImageToProject(filename) {
+    if (!currentProject) return;
+
+    try {
+        const res = await fetch('/api/copy_base_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: currentProject, filename })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            showToast(data.error, 'error');
+        } else {
+            showToast(`"${filename}" agregada al proyecto.`);
+            // Recargar estado del proyecto para actualizar la galería
+            const infoRes = await fetch(`/api/info?project=${currentProject}`);
+            const infoData = await infoRes.json();
+            projectImages = infoData.images;
+            updateImagesGallery();
+            updateStepAccess();
+        }
+    } catch (e) {
+        showToast('Error al agregar la imagen al proyecto', 'error');
+    }
+}
+
+function filterBaseImages() {
+    if (!baseImagesData) return;
+
+    const collectionVal = (document.getElementById('base-images-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('base-images-search')?.value || '').toLowerCase();
+
+    const filtered = baseImagesData.images.filter(img => {
+        const matchCollection = !collectionVal || img.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || img.filename.toLowerCase().includes(searchVal) || img.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+
+    renderBaseImagesGrid(filtered);
+}
+
+function refreshBaseImagesAddedState() {
+    // Actualiza las tarjetas de la biblioteca base para reflejar cuáles ya están en el proyecto
+    const grid = document.getElementById('base-images-grid');
+    if (!grid || !baseImagesData) return;
+
+    grid.querySelectorAll('.base-image-card').forEach(card => {
+        const filename = card.dataset.filename;
+        const isAdded = projectImages.includes(filename);
+        if (isAdded) {
+            card.classList.add('already-added');
+            const overlay = card.querySelector('.base-img-overlay');
+            if (overlay) overlay.innerHTML = '<span class="base-img-added-check">✅ Ya en proyecto</span>';
+        } else {
+            card.classList.remove('already-added');
+            const overlay = card.querySelector('.base-img-overlay');
+            if (overlay && !overlay.querySelector('.base-img-add-btn')) {
+                overlay.innerHTML = '';
+                const addBtn = document.createElement('button');
+                addBtn.className = 'base-img-add-btn';
+                addBtn.innerText = '➕ Agregar';
+                addBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    copyBaseImageToProject(filename);
+                };
+                overlay.appendChild(addBtn);
+            }
+        }
     });
 }
 
@@ -809,6 +989,8 @@ function toggleBackgroundType(type) {
     } else {
         if (imgSection) imgSection.style.display = 'block';
         if (vidSection) vidSection.style.display = 'none';
+        // Cargar la biblioteca de imágenes base al cambiar a modo imagen
+        loadBaseImages();
     }
 
     updateStepAccess();
@@ -1650,31 +1832,7 @@ function renderLyricsEditor() {
         const deleteSegBtn = document.createElement('button');
         deleteSegBtn.className = 'delete-segment-btn';
         deleteSegBtn.innerText = '🗑️ Eliminar';
-        deleteSegBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (deleteSegBtn.classList.contains('confirm-delete')) {
-                // Borrar el segmento
-                lyricsData.segments.splice(segIdx, 1);
-                // Re-indexar los IDs de segmentos para que sean continuos
-                lyricsData.segments.forEach((seg, idx) => {
-                    seg.id = idx;
-                    if (seg.words) {
-                        seg.words.forEach(w => w.segment_id = idx);
-                    }
-                });
-                renderLyricsEditor();
-                showToast(`Segmento ${segIdx + 1} eliminado de la interfaz. Guarda los cambios para persistir.`, "warning");
-            } else {
-                // Resetear otros botones primero
-                document.querySelectorAll('.delete-segment-btn').forEach(btn => {
-                    btn.classList.remove('confirm-delete');
-                    btn.innerText = '🗑️ Eliminar';
-                });
-                // Marcar este para confirmar
-                deleteSegBtn.classList.add('confirm-delete');
-                deleteSegBtn.innerText = '⚠️ ¿Confirmar?';
-            }
-        };
+        deleteSegBtn.onclick = () => deleteSegment(segIdx);
 
         header.appendChild(title);
         header.appendChild(deleteSegBtn);
@@ -1788,6 +1946,17 @@ function updateSegmentTimesFromWords(segIdx) {
     }
 }
 
+function deleteSegment(segIdx) {
+    if (!lyricsData || !lyricsData.segments) return;
+    if (confirm(`¿Estás seguro de que deseas eliminar por completo el segmento ${segIdx + 1}?`)) {
+        lyricsData.segments.splice(segIdx, 1);
+        // Re-indexar los IDs de segmentos para que sean continuos
+        lyricsData.segments.forEach((seg, idx) => {
+            seg.id = idx;
+        });
+        renderLyricsEditor();
+    }
+}
 
 function deleteWord(segIdx, wIdx) {
     if (!lyricsData || !lyricsData.segments[segIdx]) return;
@@ -1831,72 +2000,8 @@ function addWordToSegment(segIdx) {
     renderLyricsEditor();
 }
 
-function addSegmentManually() {
-    if (!lyricsData) {
-        lyricsData = { segments: [] };
-    }
-    if (!lyricsData.segments) {
-        lyricsData.segments = [];
-    }
-
-    let newStart = 0.0;
-    let newEnd = 2.0;
-
-    // Colocar después del último segmento existente, si hay alguno
-    if (lyricsData.segments.length > 0) {
-        const lastSeg = lyricsData.segments[lyricsData.segments.length - 1];
-        newStart = parseFloat((lastSeg.end + 1.0).toFixed(2));
-        newEnd = parseFloat((newStart + 2.0).toFixed(2));
-    }
-
-    const newSeg = {
-        id: lyricsData.segments.length,
-        start: newStart,
-        end: newEnd,
-        text: "Nueva sección",
-        words: [
-            {
-                word: "Nueva",
-                start: newStart,
-                end: parseFloat((newStart + 1.0).toFixed(2)),
-                confidence: 1.0
-            },
-            {
-                word: "sección",
-                start: parseFloat((newStart + 1.0).toFixed(2)),
-                end: newEnd,
-                confidence: 1.0
-            }
-        ]
-    };
-
-    lyricsData.segments.push(newSeg);
-    renderLyricsEditor();
-
-    // Scroll al final del contenedor para ver la nueva sección
-    setTimeout(() => {
-        const container = document.getElementById('lyrics-editor-list');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
-    }, 50);
-
-    showToast("Sección agregada al final de la lista.", "info");
-}
-
 async function saveLyricsData() {
     if (!currentProject || !lyricsData) return;
-
-    // Ordenar los segmentos por tiempo de inicio y re-indexar IDs antes de guardar
-    lyricsData.segments.sort((a, b) => (a.start || 0) - (b.start || 0));
-    lyricsData.segments.forEach((seg, idx) => {
-        seg.id = idx;
-        if (seg.words) {
-            seg.words.forEach(w => {
-                w.segment_id = idx;
-            });
-        }
-    });
 
     try {
         showToast("Guardando cambios de letras...", "warning");

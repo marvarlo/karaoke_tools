@@ -301,10 +301,7 @@ El modelo RoFormer se descargará y procesará el audio para generar la instrume
                                 <h2>✏️ Editor de Letras y Timings Corregidos</h2>
                                 <p class="step-desc" style="margin-bottom: 0;">Corrige la ortografía, borra alucinaciones (como segmentos "y" repetidos) y afina tiempos por palabra en segundos.</p>
                             </div>
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <button class="glow-button primary" onclick="addSegmentManually()">➕ Agregar Sección</button>
-                                <button class="glow-button success" onclick="saveLyricsData()">💾 Guardar Letra y Tiempos</button>
-                            </div>
+                            <button class="glow-button success" onclick="saveLyricsData()">💾 Guardar Letra y Tiempos</button>
                         </div>
                         <div id="lyrics-editor-list" class="lyrics-editor-list" style="max-height: 450px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; padding-right: 8px;">
                             <!-- Inyectado por JS -->
@@ -337,20 +334,56 @@ El modelo RoFormer se descargará y procesará el audio para generar la instrume
                         </label>
                     </div>
 
-                    <!-- SECCIÓN IMÁGENES (ORIGINAL) -->
+                    <!-- SECCIÓN IMÁGENES (REORGANIZADA) -->
                     <div id="bg-image-section">
-                        <div class="file-upload-box image-upload" id="images-dropzone">
-                            <input type="file" id="p-images" accept="image/*" multiple class="file-input" onchange="handleImagesUpload(event)">
-                            <div class="upload-content">
-                                <span class="upload-icon">🖼️</span>
-                                <span class="upload-text" id="images-upload-label">Arrastra varias imágenes aquí o haz click para explorar</span>
+
+                        <!-- Galería del proyecto (imágenes ya agregadas) -->
+                        <div class="project-images-zone">
+                            <h3 class="gallery-title">
+                                Imágenes del Proyecto 
+                                <span class="gallery-count-badge" id="gallery-count-badge">0 imágenes</span>
+                            </h3>
+                            <div class="images-gallery" id="images-gallery">
+                                <div class="gallery-empty-message">Agrega imágenes de la biblioteca de abajo o sube las tuyas propias. ¡Arrástralas aquí!</div>
                             </div>
                         </div>
 
-                        <h3 class="gallery-title">Galería de Imágenes del Proyecto (<span id="gallery-count">0</span>)</h3>
-                        <div class="images-gallery" id="images-gallery">
-                            <div class="gallery-empty-message">Aún no has subido imágenes. ¡Arrastra archivos arriba!</div>
+                        <!-- Biblioteca de imágenes base -->
+                        <div id="base-images-section" class="base-images-section">
+                            <div class="base-images-header">
+                                <h3 class="gallery-title" style="margin: 0;">
+                                    🖼️ Biblioteca de Imágenes Base
+                                    <span class="badge" style="font-size: 0.75rem; background: rgba(0,255,180,0.1); color: var(--primary-neon); margin-left: 8px;" id="base-images-count-badge">0 imágenes</span>
+                                </h3>
+                                <div class="base-images-toolbar">
+                                    <select id="base-images-collection-filter" class="glass-select" onchange="filterBaseImages()" style="min-width: 170px;">
+                                        <option value="">Todas las colecciones</option>
+                                    </select>
+                                    <div class="base-images-search-wrap">
+                                        <span class="search-icon-inline">🔍</span>
+                                        <input type="text" id="base-images-search" class="glass-input" placeholder="Buscar imagen..." oninput="filterBaseImages()">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="base-images-grid" id="base-images-grid">
+                                <div class="gallery-empty-message">Cargando biblioteca de imágenes...</div>
+                            </div>
                         </div>
+
+                        <!-- Dropzone de subida propia (al final) -->
+                        <div class="own-upload-zone">
+                            <h4 class="gallery-title" style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-muted);">
+                                ☁️ Subir imagen propia
+                            </h4>
+                            <div class="file-upload-box image-upload" id="images-dropzone">
+                                <input type="file" id="p-images" accept="image/*" multiple class="file-input" onchange="handleImagesUpload(event)">
+                                <div class="upload-content">
+                                    <span class="upload-icon">🖼️</span>
+                                    <span class="upload-text" id="images-upload-label">Arrastra tus imágenes aquí o haz clic para explorar (PNG, JPG, WEBP)</span>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     <!-- SECCIÓN VIDEO EN BUCLE (NUEVA) -->

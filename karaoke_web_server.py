@@ -65,7 +65,6 @@ mimetypes.add_type('video/mp4', '.mp4')
 
 # Rutas globales
 WORKSPACE_DIR = Path(__file__).parent.resolve()
-PROJECTS_DIR  = WORKSPACE_DIR / 'projects'
 WEB_UI_DIR = WORKSPACE_DIR / 'web_ui'
 VENV_PYTHON = WORKSPACE_DIR / '.venv' / 'Scripts' / 'python.exe'
 
@@ -311,8 +310,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
         if path == '/api/projects':
             # Listar proyectos (carpetas que tengan config.json en el directorio)
             projects = []
-            PROJECTS_DIR.mkdir(exist_ok=True)
-            for item in PROJECTS_DIR.iterdir():
+            for item in WORKSPACE_DIR.iterdir():
                 if item.is_dir() and not item.name.startswith('.') and item.name != 'web_ui':
                     cfg_file = item / 'config.json'
                     if cfg_file.exists():
@@ -336,7 +334,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta el parámetro 'project'")
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             if not project_path.exists() or not project_path.is_dir():
                 return self.send_error_json("Proyecto no encontrado")
             
@@ -363,8 +361,8 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             info = {
                 "config": config,
                 "status": {
-                    "audio_exists": audio_file.exists(),
-                    "instrumental_exists": (project_path / "instrumental.mp3").exists(),
+                    "audio_exists": audio_file.exists() and audio_file.stat().st_size > 0,
+                    "instrumental_exists": (project_path / "instrumental.mp3").exists() and (project_path / "instrumental.mp3").stat().st_size > 0,
                     "images_count": len(images_list),
                     "words_json_exists": (out_dir / 'words.json').exists(),
                     "words_srt_exists": (out_dir / 'words.srt').exists(),
@@ -381,7 +379,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta el parámetro 'project'")
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             images_dir = project_path / 'images'
             if not images_dir.exists():
                 return self.send_json({"images": []})
@@ -411,6 +409,74 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 "base_videos": base_list,
                 "loop_videos": loop_list
             })
+
+        # Endpoint para listar las imágenes pre-cargadas de base_images/
+        elif path == '/api/base_images':
+            base_dir = WORKSPACE_DIR / 'base_images'
+            img_exts = {'.png', '.jpg', '.jpeg', '.webp'}
+            
+            images = []
+            collections = set()
+            
+            if base_dir.exists():
+                for p in sorted(base_dir.iterdir()):
+                    if p.suffix.lower() not in img_exts:
+                        continue
+                    # Detectar colección a partir del prefijo del nombre
+                    # Ej: "Ciudad-Roja-1.png" -> "Ciudad Roja"
+                    # Ej: "Karaoke_neon_1.png" -> "Karaoke Neon"
+                    stem = p.stem  # nombre sin extensión
+                    # Quitar número final (ej: -1, _1, _2, etc.)
+                    import re
+                    base_name = re.sub(r'[-_]\d+$', '', stem)
+                    # Convertir separadores a espacios y capitalizar cada palabra
+                    collection = ' '.join(
+                        word.capitalize()
+                        for word in re.split(r'[-_]', base_name)
+                        if word
+                    )
+                    collections.add(collection)
+                    images.append({
+                        "filename": p.name,
+                        "path": f"base_images/{p.name}",
+                        "collection": collection
+                    })
+            
+            return self.send_json({
+                "images": images,
+                "collections": sorted(collections)
+            })
+
+        # Endpoint para servir archivos de imagen de base_images/ (para miniaturas)
+        elif path == '/api/base_image_file':
+            filename = query.get('filename', [''])[0]
+            if not filename:
+                return self.send_error_json("Falta el parámetro 'filename'")
+            
+            # Prevenir path traversal — solo nombre de archivo, no rutas
+            if '/' in filename or '\\' in filename or '..' in filename:
+                return self.send_error_json("Nombre de archivo no válido", 403)
+            
+            filepath = (WORKSPACE_DIR / 'base_images' / filename).resolve()
+            
+            # Verificar que esté dentro de base_images/
+            try:
+                filepath.relative_to((WORKSPACE_DIR / 'base_images').resolve())
+            except ValueError:
+                return self.send_error_json("Acceso no autorizado", 403)
+            
+            if not filepath.exists() or filepath.is_dir():
+                return self.send_error_json("Imagen no encontrada", 404)
+            
+            self.send_response(200)
+            mime, _ = mimetypes.guess_type(str(filepath))
+            self.send_header('Content-Type', mime or 'image/png')
+            self.send_header('Cache-Control', 'max-age=3600')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open(filepath, 'rb') as f:
+                self.wfile.write(f.read())
+            return
 
         elif path == '/api/video_file':
             filepath_str = query.get('path', [''])[0]
@@ -452,7 +518,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta el parámetro 'project'")
             
-            map_file = PROJECTS_DIR / project_name / 'output' / 'map.json'
+            map_file = WORKSPACE_DIR / project_name / 'output' / 'map.json'
             if not map_file.exists():
                 return self.send_error_json("El mapa no ha sido generado aún. Corre la transcripción primero.")
             
@@ -467,7 +533,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta el parámetro 'project'")
             
-            words_file = PROJECTS_DIR / project_name / 'output' / 'words.json'
+            words_file = WORKSPACE_DIR / project_name / 'output' / 'words.json'
             if not words_file.exists():
                 return self.send_error_json("La transcripción no existe aún.")
             
@@ -491,7 +557,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name or not filename:
                 return self.send_error_json("Falta 'project' o 'file'")
             
-            filepath = PROJECTS_DIR / project_name / 'images' / filename
+            filepath = WORKSPACE_DIR / project_name / 'images' / filename
             if not filepath.exists() or filepath.is_dir():
                 return self.send_error_json("Imagen no encontrada", 404)
             
@@ -512,7 +578,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta 'project'")
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             cfg_file = project_path / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no válido")
@@ -550,7 +616,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta 'project'")
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             cfg_file = project_path / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no válido")
@@ -588,7 +654,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                         "path": p
                     })
             # Agregar también cualquier archivo .ttf en la raíz o subcarpetas del proyecto
-            for ttf in PROJECTS_DIR.glob('**/*.ttf'):
+            for ttf in WORKSPACE_DIR.glob('**/*.ttf'):
                 if '.venv' not in ttf.parts:
                     available.append({
                         "name": f"[Proyecto] {ttf.name}",
@@ -660,7 +726,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not name:
                 return self.send_error_json("El nombre del proyecto contiene caracteres no válidos")
 
-            project_path = PROJECTS_DIR / name
+            project_path = WORKSPACE_DIR / name
             is_new = not project_path.exists()
 
             # Crear directorios
@@ -740,7 +806,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name or not new_config:
                 return self.send_error_json("Parámetros incorrectos")
                 
-            cfg_file = PROJECTS_DIR / project_name / 'config.json'
+            cfg_file = WORKSPACE_DIR / project_name / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no encontrado")
                 
@@ -776,7 +842,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             clean_name = Path(filename).stem
             clean_name = "".join(c for c in clean_name if c.isalnum() or c in ('_', '-')) + ext
             
-            images_dir = PROJECTS_DIR / project_name / 'images'
+            images_dir = WORKSPACE_DIR / project_name / 'images'
             images_dir.mkdir(exist_ok=True)
             
             dest = images_dir / clean_name
@@ -828,7 +894,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name or not filename:
                 return self.send_error_json("Parámetros incorrectos")
                 
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             img_file = project_path / 'images' / filename
             if img_file.exists() and img_file.is_file():
                 try:
@@ -838,6 +904,43 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     return self.send_error_json(f"Error al eliminar imagen: {str(e)}")
             else:
                 return self.send_error_json("Imagen no encontrada")
+
+        # ── COPIAR IMAGEN DE BIBLIOTECA BASE AL PROYECTO ──────────────────────
+        elif path == '/api/copy_base_image':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+            
+            project_name = data.get('project')
+            filename = data.get('filename')
+            
+            if not project_name or not filename:
+                return self.send_error_json("Parámetros incorrectos")
+            
+            # Prevenir path traversal
+            if '/' in filename or '\\' in filename or '..' in filename:
+                return self.send_error_json("Nombre de archivo no válido", 403)
+            
+            src = (WORKSPACE_DIR / 'base_images' / filename).resolve()
+            
+            # Verificar seguridad
+            try:
+                src.relative_to((WORKSPACE_DIR / 'base_images').resolve())
+            except ValueError:
+                return self.send_error_json("Acceso no autorizado", 403)
+            
+            if not src.exists() or src.is_dir():
+                return self.send_error_json("Imagen base no encontrada", 404)
+            
+            images_dir = WORKSPACE_DIR / project_name / 'images'
+            images_dir.mkdir(exist_ok=True)
+            dest = images_dir / filename
+            
+            # Copiar solo si no existe ya (idempotente)
+            if not dest.exists():
+                shutil.copy2(src, dest)
+            
+            return self.send_json({"ok": True, "filename": filename})
 
         # ── GUARDAR MAPA (JSON) ───────────────────────────────────────────────
         elif path == '/api/map':
@@ -851,7 +954,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name or not map_data:
                 return self.send_error_json("Parámetros incorrectos")
                 
-            map_file = PROJECTS_DIR / project_name / 'output' / 'map.json'
+            map_file = WORKSPACE_DIR / project_name / 'output' / 'map.json'
             try:
                 map_file.write_text(json.dumps(map_data, ensure_ascii=False, indent=2), encoding='utf-8')
                 return self.send_json({"success": True})
@@ -870,7 +973,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name or segments is None:
                 return self.send_error_json("Parámetros incorrectos")
                 
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             out_dir = project_path / 'output'
             words_json = out_dir / 'words.json'
             words_srt = out_dir / 'words.srt'
@@ -953,13 +1056,16 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta 'project'")
                 
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             cfg_file = project_path / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no encontrado")
                 
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
+            
+            if not audio_path.exists() or audio_path.stat().st_size == 0:
+                return self.send_error_json("El archivo de audio no existe o está vacío. Por favor sube un archivo de audio válido en el Paso 1.")
             
             # Limpiar pistas anteriores si existen
             instrumental_file = project_path / 'instrumental.mp3'
@@ -989,7 +1095,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if not project_name:
                 return self.send_error_json("Falta 'project'")
                 
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             cfg_file = project_path / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no encontrado")
@@ -1007,8 +1113,12 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
             if use_vocals:
                 vocals_path = project_path / 'vocals.mp3'
-                if vocals_path.exists():
-                    audio_path = vocals_path
+                if not vocals_path.exists() or vocals_path.stat().st_size == 0:
+                    return self.send_error_json("No se encontró el archivo de voz limpia (vocals.mp3) o está vacío. Por favor realiza la separación de audio primero.")
+                audio_path = vocals_path
+            else:
+                if not audio_path.exists() or audio_path.stat().st_size == 0:
+                    return self.send_error_json("El archivo de audio no existe o está vacío. Por favor sube un archivo de audio válido en el Paso 1.")
                     
             total_duration = 200.0 # fallback por defecto (3:20 mins)
             try:
@@ -1049,7 +1159,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                     if status["status"] == "success":
                         # Whisper de por sí genera '<audio_stem>_words.json'
                         # Renombrarlo a words.json y words.srt
-                        stem = Path(audio_path).stem
+                        stem = Path(cfg.get('audio', 'audio.mp3')).stem
                         gen_json = project_path / 'output' / f"{stem}_words.json"
                         gen_srt = project_path / 'output' / f"{stem}_words.srt"
                         
@@ -1107,7 +1217,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             font_size = data.get('font_size', 72)
             style = data.get('style', 'minimal')
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             cfg_file = project_path / 'config.json'
             if not cfg_file.exists():
                 return self.send_error_json("Proyecto no encontrado")
@@ -1189,8 +1299,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_server(port=8080):
-    # Asegurar carpetas base
-    PROJECTS_DIR.mkdir(exist_ok=True)
+    # Asegurar que la carpeta web_ui existe
     if not WEB_UI_DIR.exists():
         print(f"[WARNING] Carpeta {WEB_UI_DIR} no encontrada. Asegurate de crear los archivos del frontend.")
         
