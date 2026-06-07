@@ -395,19 +395,41 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             
             video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
             
-            base_list = []
-            if base_dir.exists():
-                base_list = [f"base_videos/{p.name}" for p in base_dir.iterdir() if p.suffix.lower() in video_exts]
-                base_list.sort()
+            def scan_videos(directory, parent_name):
+                videos = []
+                collections = set()
+                if not directory.exists():
+                    return videos, collections
                 
-            loop_list = []
-            if loop_dir.exists():
-                loop_list = [f"loop_videos/{p.name}" for p in loop_dir.iterdir() if p.suffix.lower() in video_exts]
-                loop_list.sort()
-                
+                for item in sorted(directory.iterdir()):
+                    if item.is_dir():
+                        collection_name = item.name.replace('_', ' ').replace('-', ' ').title()
+                        for sub_item in sorted(item.iterdir()):
+                            if sub_item.is_file() and sub_item.suffix.lower() in video_exts:
+                                collections.add(collection_name)
+                                videos.append({
+                                    "filename": sub_item.name,
+                                    "path": f"{parent_name}/{item.name}/{sub_item.name}",
+                                    "collection": collection_name
+                                })
+                    elif item.is_file() and item.suffix.lower() in video_exts:
+                        collection_name = "General" if parent_name == "base_videos" else "Otros"
+                        collections.add(collection_name)
+                        videos.append({
+                            "filename": item.name,
+                            "path": f"{parent_name}/{item.name}",
+                            "collection": collection_name
+                        })
+                return videos, sorted(list(collections))
+
+            base_videos, base_collections = scan_videos(base_dir, 'base_videos')
+            loop_videos, loop_collections = scan_videos(loop_dir, 'loop_videos')
+            
             return self.send_json({
-                "base_videos": base_list,
-                "loop_videos": loop_list
+                "base_videos": base_videos,
+                "base_collections": base_collections,
+                "loop_videos": loop_videos,
+                "loop_collections": loop_collections
             })
 
         # Endpoint para listar las imágenes pre-cargadas de base_images/

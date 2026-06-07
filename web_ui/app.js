@@ -10,6 +10,8 @@ let selectedStyle = "minimal";
 let currentPaletteName = "default";
 let statusInterval = null;
 let systemFonts = [];
+let baseVideosData = null;
+let loopVideosData = null;
 
 // ELEMENTOS DOM COMUNES
 const projectSelect = document.getElementById('project-select');
@@ -397,12 +399,15 @@ function updateStepAccess() {
         document.getElementById('step2-next').setAttribute('disabled', 'true');
     }
 
-    // Nodo 4 (Mapeo) requiere que words_srt existan. En modo video, también requiere que haya al menos 1 video en la secuencia.
+    // Nodo 4 (Mapeo) requiere que words_srt existan.
+    // Además: en modo video requiere al menos 1 video. En modo imagen requiere al menos 1 imagen.
     const node4 = document.getElementById('node-4');
     const isVideoMode = (projectConfig && projectConfig.background_type === 'video');
     const hasVideos = projectConfig && projectConfig.video_backgrounds && projectConfig.video_backgrounds.length > 0;
+    const hasImages = projectImages && projectImages.length > 0;
+    const hasBackgroundSelected = isVideoMode ? hasVideos : hasImages;
 
-    if (projectStatus.words_srt_exists && (!isVideoMode || hasVideos)) {
+    if (projectStatus.words_srt_exists && hasBackgroundSelected) {
         node4.classList.remove('disabled');
         document.getElementById('step3-next').removeAttribute('disabled');
     } else {
@@ -1021,7 +1026,8 @@ async function handleVideosUpload(event) {
                 projectConfig.video_backgrounds.push(data.filename);
                 await saveConfigSilent();
             }
-            updateBackgroundVideos();
+            await updateBackgroundVideos();
+            updateStepAccess();
         }
     } catch (e) {
         showToast(`Error al subir el video ${file.name}`, "error");
@@ -1034,36 +1040,43 @@ async function updateBackgroundVideos() {
     try {
         const res = await fetch(`/api/background_videos?project=${currentProject}`);
         const data = await res.json();
+        
+        baseVideosData = data.base_videos || [];
+        loopVideosData = data.loop_videos || [];
 
-        // Renderizar base videos
-        const baseList = document.getElementById('base-videos-list');
-        if (baseList) {
-            baseList.innerHTML = '';
-            if (!data.base_videos || data.base_videos.length === 0) {
-                baseList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos base disponibles.</div>';
-            } else {
-                data.base_videos.forEach(vPath => {
-                    const filename = vPath.split('/').pop();
-                    const card = createVideoCard(vPath, filename, 'base');
-                    baseList.appendChild(card);
-                });
-            }
+        // Rellenar el filtro de colecciones base
+        const baseFilter = document.getElementById('base-videos-collection-filter');
+        if (baseFilter) {
+            baseFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.base_collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                baseFilter.appendChild(opt);
+            });
         }
 
-        // Renderizar loop videos
-        const loopList = document.getElementById('loop-videos-list');
-        if (loopList) {
-            loopList.innerHTML = '';
-            if (!data.loop_videos || data.loop_videos.length === 0) {
-                loopList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos de loop disponibles.</div>';
-            } else {
-                data.loop_videos.forEach(vPath => {
-                    const filename = vPath.split('/').pop();
-                    const card = createVideoCard(vPath, filename, 'loop');
-                    loopList.appendChild(card);
-                });
-            }
+        // Rellenar el filtro de colecciones loop
+        const loopFilter = document.getElementById('loop-videos-collection-filter');
+        if (loopFilter) {
+            loopFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.loop_collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                loopFilter.appendChild(opt);
+            });
         }
+
+        // Reset inputs de búsqueda
+        const baseSearch = document.getElementById('base-videos-search');
+        if (baseSearch) baseSearch.value = '';
+        const loopSearch = document.getElementById('loop-videos-search');
+        if (loopSearch) loopSearch.value = '';
+
+        // Renderizar listas completas inicialmente
+        renderBaseVideosList(baseVideosData);
+        renderLoopVideosList(loopVideosData);
 
         updateVideoSequenceUI();
     } catch (e) {
@@ -1071,7 +1084,65 @@ async function updateBackgroundVideos() {
     }
 }
 
-function createVideoCard(vPath, filename, type) {
+function renderBaseVideosList(videos) {
+    const baseList = document.getElementById('base-videos-list');
+    if (!baseList) return;
+    
+    baseList.innerHTML = '';
+    if (!videos || videos.length === 0) {
+        baseList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos base disponibles.</div>';
+    } else {
+        videos.forEach(vObj => {
+            const card = createVideoCard(vObj, 'base');
+            baseList.appendChild(card);
+        });
+    }
+}
+
+function renderLoopVideosList(videos) {
+    const loopList = document.getElementById('loop-videos-list');
+    if (!loopList) return;
+    
+    loopList.innerHTML = '';
+    if (!videos || videos.length === 0) {
+        loopList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos de loop disponibles.</div>';
+    } else {
+        videos.forEach(vObj => {
+            const card = createVideoCard(vObj, 'loop');
+            loopList.appendChild(card);
+        });
+    }
+}
+
+function filterBaseVideos() {
+    if (!baseVideosData) return;
+    const collectionVal = (document.getElementById('base-videos-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('base-videos-search')?.value || '').toLowerCase();
+    const filtered = baseVideosData.filter(v => {
+        const matchCollection = !collectionVal || v.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || v.filename.toLowerCase().includes(searchVal) || v.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+    renderBaseVideosList(filtered);
+}
+
+function filterLoopVideos() {
+    if (!loopVideosData) return;
+    const collectionVal = (document.getElementById('loop-videos-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('loop-videos-search')?.value || '').toLowerCase();
+    const filtered = loopVideosData.filter(v => {
+        const matchCollection = !collectionVal || v.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || v.filename.toLowerCase().includes(searchVal) || v.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+    renderLoopVideosList(filtered);
+}
+
+function createVideoCard(videoObj, type) {
+    const vPath = videoObj.path;
+    const filename = videoObj.filename;
+    const collection = videoObj.collection;
+
     const card = document.createElement('div');
     card.className = 'video-item-card';
 
@@ -1089,8 +1160,21 @@ function createVideoCard(vPath, filename, type) {
     const badge = document.createElement('span');
     badge.className = `badge-video-source badge-${type}`;
     badge.innerText = type === 'base' ? 'base' : 'loop';
-
     meta.appendChild(badge);
+
+    if (collection) {
+        const colBadge = document.createElement('span');
+        colBadge.className = 'badge-video-collection';
+        colBadge.innerText = collection;
+        colBadge.style.marginLeft = '5px';
+        colBadge.style.fontSize = '0.7rem';
+        colBadge.style.background = 'rgba(255, 255, 255, 0.05)';
+        colBadge.style.padding = '2px 6px';
+        colBadge.style.borderRadius = '4px';
+        colBadge.style.color = 'var(--text-muted)';
+        meta.appendChild(colBadge);
+    }
+
     info.appendChild(name);
     info.appendChild(meta);
 
