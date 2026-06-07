@@ -1510,4 +1510,216 @@ h3 {
     opacity: 0.8;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   PASO 3 — BIBLIOTECA DE IMÁGENES BASE
+   ══════════════════════════════════════════════════════════════════════════════ */
 
+/* Zona de proyecto: galería de imágenes ya en el proyecto */
+.project-images-zone {
+    margin-bottom: 30px;
+}
+
+.gallery-count-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(200, 144, 58, 0.12);
+    color: var(--accent-gold);
+    border: 1px solid rgba(200, 144, 58, 0.25);
+    border-radius: 20px;
+    padding: 2px 10px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+/* Sección de biblioteca base */
+.base-images-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+}
+
+/* Cabecera con título + toolbar en la misma fila */
+.base-images-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+/* Toolbar: filtro de colección + buscador */
+.base-images-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.base-images-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-icon-inline {
+    position: absolute;
+    left: 10px;
+    font-size: 0.85rem;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.base-images-search-wrap .glass-input {
+    padding-left: 30px;
+    width: 190px;
+    height: 36px;
+    font-size: 0.85rem;
+}
+
+/* Grid de imágenes base */
+.base-images-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+/* Tarjeta individual de imagen base */
+.base-image-card {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.base-image-card:hover {
+    border-color: var(--primary-neon);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 255, 180, 0.15);
+}
+
+.base-image-card img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    background: #111;
+    transition: opacity 0.2s ease;
+}
+
+.base-image-card:hover img {
+    opacity: 0.7;
+}
+
+/* Badge de colección (esquina superior izquierda) */
+.base-img-collection-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, 0.65);
+    color: var(--accent-gold);
+    border: 1px solid rgba(200, 144, 58, 0.3);
+    border-radius: 4px;
+    padding: 2px 6px;
+    backdrop-filter: blur(4px);
+    letter-spacing: 0.04em;
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+/* Overlay de acción (aparece en hover sobre la imagen) */
+.base-img-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 22px; /* dejar espacio para el nombre */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.base-image-card:hover .base-img-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Botón "Agregar" dentro del overlay */
+.base-img-add-btn {
+    background: rgba(0, 255, 180, 0.9);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 4px 12px rgba(0, 255, 180, 0.4);
+}
+
+.base-img-add-btn:hover {
+    background: #00e0a0;
+    transform: scale(1.05);
+}
+
+/* Nombre del archivo (pie de tarjeta) */
+.base-img-name {
+    padding: 4px 8px;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: rgba(0, 0, 0, 0.5);
+    height: 22px;
+    line-height: 14px;
+    display: flex;
+    align-items: center;
+}
+
+/* Estado: imagen ya agregada al proyecto */
+.base-image-card.already-added {
+    border-color: rgba(0, 255, 180, 0.4);
+}
+
+.base-image-card.already-added img {
+    opacity: 0.5;
+}
+
+.base-img-added-check {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--primary-neon);
+    background: rgba(0, 0, 0, 0.75);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 255, 180, 0.4);
+    backdrop-filter: blur(6px);
+}
+
+/* Zona de subida propia (dropzone al final) */
+.own-upload-zone {
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 20px;
+}
+
+.own-upload-zone .file-upload-box {
+    margin-bottom: 0;
+}
