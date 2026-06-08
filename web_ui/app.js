@@ -574,8 +574,11 @@ async function startWhisper() {
     const useVocalsInput = document.getElementById('whisper-use-vocals');
     const useVocals = useVocalsInput ? useVocalsInput.checked : false;
 
+    const whisperModelSelect = document.getElementById('p-whisper');
+    const whisperModel = whisperModelSelect ? whisperModelSelect.value : 'medium';
+
     try {
-        const res = await fetch(`/api/run_whisper?project=${currentProject}&use_vocals=${useVocals}`, { method: 'POST' });
+        const res = await fetch(`/api/run_whisper?project=${currentProject}&use_vocals=${useVocals}&model=${whisperModel}`, { method: 'POST' });
         const data = await res.json();
 
         if (data.error) {
@@ -2469,6 +2472,7 @@ const colorPalettes = {
 // VARIABLES GLOBALES DEL CREADOR DE PALETAS
 let customPaletteColors = [];
 let activeEditColorIndex = -1;
+let activeEditPaletteKey = null;
 
 function switchPaletteTab(tab) {
     const tabAll = document.getElementById('tab-all-palettes');
@@ -2553,6 +2557,7 @@ function setupPaletteHandlers() {
         closeCreateModal.addEventListener('click', () => {
             createModal.style.display = 'none';
             closeColorEditPopover();
+            activeEditPaletteKey = null;
         });
     }
     
@@ -2560,6 +2565,7 @@ function setupPaletteHandlers() {
         cancelCreateBtn.addEventListener('click', () => {
             createModal.style.display = 'none';
             closeColorEditPopover();
+            activeEditPaletteKey = null;
         });
     }
     
@@ -2624,14 +2630,24 @@ function setupPaletteHandlers() {
     }
 }
 
-function openCreatePaletteModal() {
+function openCreatePaletteModal(pKey = null) {
     const createModal = document.getElementById('create-palette-modal');
     if (!createModal) return;
     
-    // 8 colores de escala gris-azulada elegante por defecto
-    customPaletteColors = ['#FFFFFF', '#F4F5F8', '#E2E5EC', '#CFD3E0', '#B6BAD1', '#989DB5', '#7A7E9B', '#484B64'];
+    activeEditPaletteKey = pKey;
+    const titleEl = createModal.querySelector('h3');
     
-    document.getElementById('custom-palette-name').value = "My Palette";
+    if (pKey && colorPalettes[pKey]) {
+        // Modo edición
+        customPaletteColors = [...colorPalettes[pKey].colors];
+        document.getElementById('custom-palette-name').value = colorPalettes[pKey].name;
+        if (titleEl) titleEl.innerText = "Edit Color Palette";
+    } else {
+        // Modo creación
+        customPaletteColors = ['#FFFFFF', '#F4F5F8', '#E2E5EC', '#CFD3E0', '#B6BAD1', '#989DB5', '#7A7E9B', '#484B64'];
+        document.getElementById('custom-palette-name').value = "My Palette";
+        if (titleEl) titleEl.innerText = "Create Color Palette";
+    }
     
     closeColorEditPopover();
     renderCustomPaletteStrips();
@@ -2825,12 +2841,14 @@ function generateStylesFromColors(colors) {
     };
 }
 
+let pendingDeletePaletteKey = null;
+
 function saveCustomPalette() {
     const nameInput = document.getElementById('custom-palette-name');
     let name = nameInput ? nameInput.value.trim() : "";
     if (!name) name = "My Palette";
     
-    const key = `custom_${Date.now()}`;
+    const key = activeEditPaletteKey || `custom_${Date.now()}`;
     const colors = [...customPaletteColors];
     const styles = generateStylesFromColors(colors);
     
@@ -2854,7 +2872,20 @@ function saveCustomPalette() {
     custom[key] = newPalette;
     localStorage.setItem('custom_color_palettes', JSON.stringify(custom));
     
-    showToast(`Custom palette "${name}" created.`);
+    if (activeEditPaletteKey) {
+        showToast(`Custom palette "${name}" updated.`);
+        if (currentPaletteName === key) {
+            applyPaletteUI(key);
+            const activeCard = document.querySelector(`.style-card[data-style="${selectedStyle}"]`);
+            if (activeCard) {
+                activeCard.click();
+            }
+        }
+    } else {
+        showToast(`Custom palette "${name}" created.`);
+    }
+    
+    activeEditPaletteKey = null;
     
     document.getElementById('create-palette-modal').style.display = 'none';
     closeColorEditPopover();
@@ -2863,11 +2894,32 @@ function saveCustomPalette() {
     switchPaletteTab('my');
 }
 
-function deleteCustomPalette(pKey) {
-    if (!confirm(`¿Estás seguro de que deseas eliminar esta paleta?`)) {
+function deleteCustomPalette(pKey, buttonEl) {
+    if (pendingDeletePaletteKey !== pKey) {
+        const prevPendingBtn = document.querySelector('.delete-palette-card-btn.confirm-delete');
+        if (prevPendingBtn) {
+            prevPendingBtn.innerHTML = '&times;';
+            prevPendingBtn.title = 'Eliminar paleta';
+            prevPendingBtn.classList.remove('confirm-delete');
+        }
+        
+        pendingDeletePaletteKey = pKey;
+        buttonEl.innerHTML = '⚠️';
+        buttonEl.title = 'Hacer clic de nuevo para confirmar';
+        buttonEl.classList.add('confirm-delete');
+        
+        setTimeout(() => {
+            if (pendingDeletePaletteKey === pKey) {
+                pendingDeletePaletteKey = null;
+                buttonEl.innerHTML = '&times;';
+                buttonEl.title = 'Eliminar paleta';
+                buttonEl.classList.remove('confirm-delete');
+            }
+        }, 3000);
         return;
     }
     
+    pendingDeletePaletteKey = null;
     delete colorPalettes[pKey];
     
     let stored = localStorage.getItem('custom_color_palettes');
@@ -2950,7 +3002,6 @@ function renderPaletteCards() {
             card.style.boxShadow = `0 0 15px ${primaryColor}60`;
         }
         
-        // Cabecera visual (imagen con fallback de gradiente)
         const vHeader = document.createElement('div');
         vHeader.className = 'palette-visual-header';
         if (pal.image) {
@@ -2959,7 +3010,6 @@ function renderPaletteCards() {
             vHeader.style.background = pal.headerBg;
         }
         
-        // Franja de colores
         const colorStrip = document.createElement('div');
         colorStrip.className = 'palette-color-strip';
         
@@ -2970,7 +3020,6 @@ function renderPaletteCards() {
             colorStrip.appendChild(block);
         });
         
-        // Nombre superpuesto
         const nameOverlay = document.createElement('div');
         nameOverlay.className = 'palette-name-overlay';
         nameOverlay.innerText = pal.name;
@@ -2979,9 +3028,20 @@ function renderPaletteCards() {
         card.appendChild(vHeader);
         card.appendChild(colorStrip);
         
-        // Si es personalizada, agregar botón para eliminarla
         if (pal.isCustom) {
             card.style.position = 'relative';
+            
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'edit-palette-card-btn';
+            editBtn.innerHTML = '✏️';
+            editBtn.title = 'Editar paleta';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                openCreatePaletteModal(pKey);
+            };
+            card.appendChild(editBtn);
+            
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
             delBtn.className = 'delete-palette-card-btn';
@@ -2989,7 +3049,7 @@ function renderPaletteCards() {
             delBtn.title = 'Eliminar paleta';
             delBtn.onclick = (e) => {
                 e.stopPropagation();
-                deleteCustomPalette(pKey);
+                deleteCustomPalette(pKey, delBtn);
             };
             card.appendChild(delBtn);
             

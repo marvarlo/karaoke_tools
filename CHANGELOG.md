@@ -4,11 +4,20 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 
 ---
 
-## [v2.1.0] — Filtros de Video, Validación y Creador de Paletas de Colores
+## [v2.1.0] — Filtros, Creador de Paletas y Reubicación de Whisper
 
 ---
 
-### 🆕 Funcionalidad 1 — Creador de Paletas de Colores Personalizadas
+### 🆕 Funcionalidad 1 — Reubicación de Modelo Whisper (Paso 1 → Paso 2)
+
+**Archivos:** `web_ui/index.html`, `web_ui/app.js`, `karaoke_web_server.py`
+
+- **Interfaz Reubicada:** Se trasladó el combobox del selector de "Modelo Whisper" desde el formulario inicial del Paso 1 al panel de sincronización con Whisper del Paso 2.
+- **Sincronización Dinámica:** Al iniciar la transcripción, la interfaz envía el modelo seleccionado al endpoint `/api/run_whisper` vía parámetro query, el cual actualiza el valor de `whisper_model` en el archivo `config.json` del proyecto y ejecuta Whisper con la precisión escogida de forma inmediata.
+
+---
+
+### 🆕 Funcionalidad 2 — Creador de Paletas de Colores Personalizadas
 
 **Archivos:** `web_ui/index.html`, `web_ui/style.css`, `web_ui/app.js`
 
@@ -19,7 +28,7 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 
 ---
 
-### 🆕 Funcionalidad 2 — Filtros de Video y Colecciones (Paso 3)
+### 🆕 Funcionalidad 3 — Filtros de Video y Colecciones (Paso 3)
 
 **Archivos:** `web_ui/app.js`, `web_ui/index.html`, `web_ui/style.css`
 
@@ -28,11 +37,22 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 
 ---
 
-### 🆕 Funcionalidad 3 — Validación de Medios en el Paso 3
+### 🆕 Funcionalidad 4 — Validación de Medios en el Paso 3
 
 **Archivos:** `web_ui/app.js`
 
 - **Validación Dinámica:** Modificación en la función `updateStepAccess()` para habilitar o deshabilitar el botón "Siguiente Paso" (`#step3-next`) según el tipo de fondo activo: requiere al menos una imagen en la galería para el modo Imagen, o al menos un video en la secuencia para el modo Video.
+
+---
+
+### 🐛 Corrección — Capas y Visualización de Paletas de Colores
+
+**Archivos:** `web_ui/index.html`
+
+- **Ajuste de Superposición (z-index):** Se incrementó el `z-index` de `#create-palette-modal` a `2100` (originalmente `1050`) para que se muestre correctamente sobre el modal de selección `#palette-modal` (que tiene `z-index: 2000`). Esto permite al usuario editar colores y nombrar la paleta sin tener que cerrar el selector de fondo.
+- **Visualización en "My Palettes" (Grid):** Se corrigió un problema de visualización donde las paletas personalizadas se veían como líneas verticales colapsadas. Esto sucedía porque el contenedor `#my-palettes-view` usaba un contenedor flex sin anchos explícitos para las tarjetas. Se cambió el contenedor al estilo CSS de clase `.palette-list-grid` (grid de columnas adaptativas con un mínimo de 220px) para que las tarjetas de usuario se representen de forma idéntica a las recomendadas.
+- **Edición de Paletas Guardadas:** Se incorporó el botón de edición (✏️) que se revela al pasar el cursor sobre cada tarjeta de paleta en "My Palettes". Este abre el creador en modo edición (`openCreatePaletteModal(pKey)`), cargando los colores y el nombre originales para que el usuario pueda modificarlos y guardarlos.
+- **Eliminación Segura (Sin Confirmación Nativa):** Se implementó un flujo de confirmación de doble clic sobre el botón de borrado (×). El primer clic cambia el botón a un ícono de advertencia animado (⚠️) y el segundo clic confirma la eliminación de la paleta. Si no se pulsa de nuevo en 3 segundos, se cancela y se revierte al estado original, previniendo borrados involuntarios y bloqueos del navegador.
 
 ---
 

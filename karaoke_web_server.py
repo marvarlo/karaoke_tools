@@ -1126,6 +1126,11 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             
             use_vocals = query.get('use_vocals', ['false'])[0] == 'true'
             cfg['transcribe_from_vocals'] = use_vocals
+            
+            # Leer el modelo enviado en el query (fallback al que ya está en config o a medium)
+            model = query.get('model', [cfg.get('whisper_model', 'medium')])[0]
+            cfg['whisper_model'] = model
+            
             try:
                 cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
             except Exception as e:

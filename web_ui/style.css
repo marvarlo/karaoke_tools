@@ -1827,25 +1827,66 @@ h3 {
 .custom-palette-strips-wrapper {
     position: relative;
 }
-/* Estilo del botón borrar para las tarjetas de paleta de usuario */
-.delete-palette-card-btn {
+/* Estilo del botón borrar y editar para las tarjetas de paleta de usuario */
+.delete-palette-card-btn,
+.edit-palette-card-btn {
     position: absolute;
     top: 5px;
-    right: 5px;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: rgba(220, 38, 38, 0.8);
-    color: white;
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    transition: background 0.2s;
-    z-index: 5;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
+
+.delete-palette-card-btn {
+    right: 5px;
+    background: rgba(220, 38, 38, 0.8);
+    color: white;
+    font-size: 14px;
+}
+
 .delete-palette-card-btn:hover {
     background: rgba(220, 38, 38, 1);
+    transform: scale(1.1);
+}
+
+.delete-palette-card-btn.confirm-delete {
+    background: #d97706 !important;
+    animation: btnPulse 1s infinite alternate;
+}
+
+@keyframes btnPulse {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.15); }
+}
+
+.edit-palette-card-btn {
+    right: 32px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: white;
+    font-size: 11px;
+}
+
+.edit-palette-card-btn:hover {
+    background: rgba(0, 255, 180, 0.85);
+    color: #000;
+    border-color: transparent;
+    transform: scale(1.1);
+}
+
+.palette-card:hover .delete-palette-card-btn,
+.palette-card:hover .edit-palette-card-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
