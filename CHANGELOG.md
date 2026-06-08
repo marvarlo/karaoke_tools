@@ -53,6 +53,7 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 - **Visualización en "My Palettes" (Grid):** Se corrigió un problema de visualización donde las paletas personalizadas se veían como líneas verticales colapsadas. Esto sucedía porque el contenedor `#my-palettes-view` usaba un contenedor flex sin anchos explícitos para las tarjetas. Se cambió el contenedor al estilo CSS de clase `.palette-list-grid` (grid de columnas adaptativas con un mínimo de 220px) para que las tarjetas de usuario se representen de forma idéntica a las recomendadas.
 - **Edición de Paletas Guardadas:** Se incorporó el botón de edición (✏️) que se revela al pasar el cursor sobre cada tarjeta de paleta en "My Palettes". Este abre el creador en modo edición (`openCreatePaletteModal(pKey)`), cargando los colores y el nombre originales para que el usuario pueda modificarlos y guardarlos.
 - **Eliminación Segura (Sin Confirmación Nativa):** Se implementó un flujo de confirmación de doble clic sobre el botón de borrado (×). El primer clic cambia el botón a un ícono de advertencia animado (⚠️) y el segundo clic confirma la eliminación de la paleta. Si no se pulsa de nuevo en 3 segundos, se cancela y se revierte al estado original, previniendo borrados involuntarios y bloqueos del navegador.
+- **Reordenamiento de Dropzone (Paso 3):** Se reubicó la caja de carga de archivos (dropzone) de imágenes al principio de la sección de fondos de imagen en el Paso 3. Esto evita tener que desplazarse hasta el final de la página para subir imágenes propias del proyecto.
 
 ---
 

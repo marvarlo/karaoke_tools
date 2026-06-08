@@ -341,8 +341,22 @@ El modelo RoFormer se descargará y procesará el audio para generar la instrume
                     <!-- SECCIÓN IMÁGENES (REORGANIZADA) -->
                     <div id="bg-image-section">
 
+                        <!-- Dropzone de subida propia (al inicio) -->
+                        <div class="own-upload-zone" style="margin-bottom: 25px;">
+                            <h4 class="gallery-title" style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-muted);">
+                                ☁️ Subir imagen propia
+                            </h4>
+                            <div class="file-upload-box image-upload" id="images-dropzone">
+                                <input type="file" id="p-images" accept="image/*" multiple class="file-input" onchange="handleImagesUpload(event)">
+                                <div class="upload-content">
+                                    <span class="upload-icon">🖼️</span>
+                                    <span class="upload-text" id="images-upload-label">Arrastra tus imágenes aquí o haz clic para explorar (PNG, JPG, WEBP)</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Galería del proyecto (imágenes ya agregadas) -->
-                        <div class="project-images-zone">
+                        <div class="project-images-zone" style="margin-bottom: 25px;">
                             <h3 class="gallery-title">
                                 Imágenes del Proyecto 
                                 <span class="gallery-count-badge" id="gallery-count-badge">0 imágenes</span>
@@ -371,20 +385,6 @@ El modelo RoFormer se descargará y procesará el audio para generar la instrume
                             </div>
                             <div class="base-images-grid" id="base-images-grid">
                                 <div class="gallery-empty-message">Cargando biblioteca de imágenes...</div>
-                            </div>
-                        </div>
-
-                        <!-- Dropzone de subida propia (al final) -->
-                        <div class="own-upload-zone">
-                            <h4 class="gallery-title" style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-muted);">
-                                ☁️ Subir imagen propia
-                            </h4>
-                            <div class="file-upload-box image-upload" id="images-dropzone">
-                                <input type="file" id="p-images" accept="image/*" multiple class="file-input" onchange="handleImagesUpload(event)">
-                                <div class="upload-content">
-                                    <span class="upload-icon">🖼️</span>
-                                    <span class="upload-text" id="images-upload-label">Arrastra tus imágenes aquí o haz clic para explorar (PNG, JPG, WEBP)</span>
-                                </div>
                             </div>
                         </div>
 
