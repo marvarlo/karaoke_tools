@@ -2466,7 +2466,48 @@ const colorPalettes = {
     }
 };
 
+// VARIABLES GLOBALES DEL CREADOR DE PALETAS
+let customPaletteColors = [];
+let activeEditColorIndex = -1;
+
+function switchPaletteTab(tab) {
+    const tabAll = document.getElementById('tab-all-palettes');
+    const tabMy = document.getElementById('tab-my-palettes');
+    const viewAll = document.getElementById('all-palettes-view');
+    const viewMy = document.getElementById('my-palettes-view');
+    
+    if (tab === 'all') {
+        if (tabAll) tabAll.classList.add('active');
+        if (tabMy) tabMy.classList.remove('active');
+        if (viewAll) viewAll.style.display = 'block';
+        if (viewMy) viewMy.style.display = 'none';
+    } else {
+        if (tabAll) tabAll.classList.remove('active');
+        if (tabMy) tabMy.classList.add('active');
+        if (viewAll) viewAll.style.display = 'none';
+        if (viewMy) viewMy.style.display = 'block';
+    }
+}
+
+function loadCustomPalettesFromStorage() {
+    const stored = localStorage.getItem('custom_color_palettes');
+    if (stored) {
+        try {
+            const custom = JSON.parse(stored);
+            Object.keys(custom).forEach(key => {
+                custom[key].isCustom = true;
+                colorPalettes[key] = custom[key];
+            });
+        } catch (e) {
+            console.error("Error al cargar paletas del localStorage:", e);
+        }
+    }
+}
+
 function setupPaletteHandlers() {
+    // Cargar paletas del localStorage
+    loadCustomPalettesFromStorage();
+
     const openBtn = document.getElementById('open-palette-btn');
     const closeBtn = document.getElementById('close-palette-modal');
     const modal = document.getElementById('palette-modal');
@@ -2474,6 +2515,7 @@ function setupPaletteHandlers() {
     if (openBtn) {
         openBtn.addEventListener('click', () => {
             renderPaletteCards();
+            switchPaletteTab('all');
             modal.style.display = 'flex';
         });
     }
@@ -2490,6 +2532,359 @@ function setupPaletteHandlers() {
                 modal.style.display = 'none';
             }
         });
+    }
+
+    // --- NUEVOS HANDLERS DEL CREADOR DE PALETAS ---
+    const newPaletteBtn = document.getElementById('new-palette-btn');
+    const createModal = document.getElementById('create-palette-modal');
+    const closeCreateModal = document.getElementById('close-create-palette-modal');
+    const cancelCreateBtn = document.getElementById('cancel-create-palette-btn');
+    const confirmCreateBtn = document.getElementById('confirm-create-palette-btn');
+    const decBtn = document.getElementById('decrease-colors-btn');
+    const incBtn = document.getElementById('increase-colors-btn');
+    
+    if (newPaletteBtn) {
+        newPaletteBtn.addEventListener('click', () => {
+            openCreatePaletteModal();
+        });
+    }
+    
+    if (closeCreateModal) {
+        closeCreateModal.addEventListener('click', () => {
+            createModal.style.display = 'none';
+            closeColorEditPopover();
+        });
+    }
+    
+    if (cancelCreateBtn) {
+        cancelCreateBtn.addEventListener('click', () => {
+            createModal.style.display = 'none';
+            closeColorEditPopover();
+        });
+    }
+    
+    if (confirmCreateBtn) {
+        confirmCreateBtn.addEventListener('click', () => {
+            saveCustomPalette();
+        });
+    }
+    
+    if (decBtn) {
+        decBtn.addEventListener('click', () => {
+            if (customPaletteColors.length > 3) {
+                customPaletteColors.pop();
+                closeColorEditPopover();
+                renderCustomPaletteStrips();
+                updateColorsCountLabel();
+            }
+        });
+    }
+    
+    if (incBtn) {
+        incBtn.addEventListener('click', () => {
+            if (customPaletteColors.length < 12) {
+                const lastColor = customPaletteColors[customPaletteColors.length - 1] || '#ffffff';
+                customPaletteColors.push(lastColor);
+                closeColorEditPopover();
+                renderCustomPaletteStrips();
+                updateColorsCountLabel();
+            }
+        });
+    }
+
+    // Popover OK Button
+    const popoverOk = document.getElementById('popover-ok-btn');
+    if (popoverOk) {
+        popoverOk.addEventListener('click', () => {
+            closeColorEditPopover();
+        });
+    }
+    
+    // Sincronizar picker flotante
+    const pickerInput = document.getElementById('popover-color-picker');
+    const hexInput = document.getElementById('popover-color-hex');
+    
+    if (pickerInput && hexInput) {
+        pickerInput.addEventListener('input', (e) => {
+            const val = e.target.value.toUpperCase();
+            hexInput.value = val;
+            updateEditColor(val);
+        });
+        
+        hexInput.addEventListener('input', (e) => {
+            let val = e.target.value.trim();
+            if (!val.startsWith('#') && val.length > 0) {
+                val = '#' + val;
+            }
+            if (/^#[0-9A-F]{6}$/i.test(val)) {
+                pickerInput.value = val;
+                updateEditColor(val);
+            }
+        });
+    }
+}
+
+function openCreatePaletteModal() {
+    const createModal = document.getElementById('create-palette-modal');
+    if (!createModal) return;
+    
+    // 8 colores de escala gris-azulada elegante por defecto
+    customPaletteColors = ['#FFFFFF', '#F4F5F8', '#E2E5EC', '#CFD3E0', '#B6BAD1', '#989DB5', '#7A7E9B', '#484B64'];
+    
+    document.getElementById('custom-palette-name').value = "My Palette";
+    
+    closeColorEditPopover();
+    renderCustomPaletteStrips();
+    updateColorsCountLabel();
+    
+    createModal.style.display = 'flex';
+}
+
+function updateColorsCountLabel() {
+    const label = document.getElementById('colors-count-label');
+    if (label) {
+        label.innerText = `${customPaletteColors.length} Colors`;
+    }
+    
+    const decBtn = document.getElementById('decrease-colors-btn');
+    const incBtn = document.getElementById('increase-colors-btn');
+    
+    if (decBtn) decBtn.disabled = (customPaletteColors.length <= 3);
+    if (incBtn) incBtn.disabled = (customPaletteColors.length >= 12);
+}
+
+function renderCustomPaletteStrips() {
+    const container = document.getElementById('custom-palette-strips-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    const L = customPaletteColors.length;
+    const pct = Math.round(100 / L);
+    
+    customPaletteColors.forEach((color, idx) => {
+        const strip = document.createElement('div');
+        strip.className = 'custom-color-strip';
+        strip.style.backgroundColor = color;
+        strip.dataset.index = idx;
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'strip-overlay';
+        
+        const hexBadge = document.createElement('div');
+        hexBadge.className = 'strip-hex-badge';
+        hexBadge.innerText = color.toUpperCase();
+        
+        const actions = document.createElement('div');
+        actions.className = 'strip-actions-row';
+        
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'strip-action-btn edit-btn';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Editar color';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            openColorEditPopover(idx, editBtn);
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'strip-action-btn delete-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Eliminar color';
+        deleteBtn.disabled = (L <= 3);
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteColorFromCustom(idx);
+        };
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        overlay.appendChild(hexBadge);
+        overlay.appendChild(actions);
+        
+        const pctText = document.createElement('div');
+        pctText.className = 'strip-pct';
+        pctText.innerText = `${pct}%`;
+        
+        strip.appendChild(overlay);
+        strip.appendChild(pctText);
+        container.appendChild(strip);
+    });
+}
+
+function openColorEditPopover(index, buttonEl) {
+    const popover = document.getElementById('color-edit-popover');
+    const picker = document.getElementById('popover-color-picker');
+    const hex = document.getElementById('popover-color-hex');
+    const wrapper = document.getElementById('custom-palette-strips-wrapper');
+    
+    if (!popover || !picker || !hex || !wrapper) return;
+    
+    activeEditColorIndex = index;
+    const color = customPaletteColors[index];
+    
+    picker.value = color;
+    hex.value = color.toUpperCase();
+    
+    // Posicionar flotante respecto al botón clicado
+    const rect = buttonEl.getBoundingClientRect();
+    const parentRect = wrapper.getBoundingClientRect();
+    
+    popover.style.display = 'flex';
+    
+    const leftPos = rect.left - parentRect.left + rect.width / 2 - popover.offsetWidth / 2;
+    popover.style.left = `${Math.max(5, Math.min(parentRect.width - popover.offsetWidth - 5, leftPos))}px`;
+    popover.style.top = `${rect.bottom - parentRect.top + 8}px`;
+}
+
+function closeColorEditPopover() {
+    const popover = document.getElementById('color-edit-popover');
+    if (popover) popover.style.display = 'none';
+    activeEditColorIndex = -1;
+}
+
+function updateEditColor(val) {
+    if (activeEditColorIndex === -1) return;
+    customPaletteColors[activeEditColorIndex] = val;
+    
+    const strip = document.querySelector(`.custom-color-strip[data-index="${activeEditColorIndex}"]`);
+    if (strip) {
+        strip.style.backgroundColor = val;
+        const badge = strip.querySelector('.strip-hex-badge');
+        if (badge) badge.innerText = val.toUpperCase();
+    }
+}
+
+function deleteColorFromCustom(index) {
+    if (customPaletteColors.length <= 3) return;
+    
+    customPaletteColors.splice(index, 1);
+    closeColorEditPopover();
+    renderCustomPaletteStrips();
+    updateColorsCountLabel();
+}
+
+function hexToRgb(hex) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+    const num = parseInt(hex, 16);
+    return [
+        (num >> 16) & 255,
+        (num >> 8) & 255,
+        num & 255
+    ];
+}
+
+function generateStylesFromColors(colors) {
+    const active0 = colors[0];
+    const sung0 = colors[1] || '#FFFFFF';
+    const unsung0 = colors[2] || '#464646';
+    const active1 = colors[3] || active0;
+    const sung1 = colors[4] || sung0;
+    const bg_color = colors[colors.length - 1] || '#0A0813';
+    
+    const actRgb = hexToRgb(active0);
+    const sungRgb = hexToRgb(sung0);
+    const unsungRgb = hexToRgb(unsung0);
+    
+    const adjRgb = [Math.round(unsungRgb[0] * 0.7), Math.round(unsungRgb[1] * 0.7), Math.round(unsungRgb[2] * 0.7)];
+    const bgRgb = hexToRgb(bg_color);
+    
+    return {
+        "minimal": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, ${bg_color} 0%, #111111 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.68, overlay: 110, bg_color: bgRgb }
+        },
+        "dark": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, #050505 0%, ${bg_color} 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.48, overlay: 165, bg_color: bgRgb }
+        },
+        "neon": {
+            active: active1,
+            sung: sung1,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, #000000 0%, ${bg_color} 100%)`,
+            python: { active: hexToRgb(active1), sung: hexToRgb(sung1), unsung: unsungRgb, adj: adjRgb, bg: 0.35, overlay: 185, bg_color: bgRgb }
+        },
+        "vintage": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, ${bg_color} 0%, #3d3428 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.60, overlay: 125, bg_color: bgRgb }
+        }
+    };
+}
+
+function saveCustomPalette() {
+    const nameInput = document.getElementById('custom-palette-name');
+    let name = nameInput ? nameInput.value.trim() : "";
+    if (!name) name = "My Palette";
+    
+    const key = `custom_${Date.now()}`;
+    const colors = [...customPaletteColors];
+    const styles = generateStylesFromColors(colors);
+    
+    const newPalette = {
+        name: name,
+        isCustom: true,
+        headerBg: `linear-gradient(135deg, ${colors[0]} 0%, ${colors[colors.length-1]} 100%)`,
+        colors: colors,
+        styles: styles
+    };
+    
+    colorPalettes[key] = newPalette;
+    
+    let stored = localStorage.getItem('custom_color_palettes');
+    let custom = {};
+    if (stored) {
+        try {
+            custom = JSON.parse(stored);
+        } catch(e) {}
+    }
+    custom[key] = newPalette;
+    localStorage.setItem('custom_color_palettes', JSON.stringify(custom));
+    
+    showToast(`Custom palette "${name}" created.`);
+    
+    document.getElementById('create-palette-modal').style.display = 'none';
+    closeColorEditPopover();
+    
+    renderPaletteCards();
+    switchPaletteTab('my');
+}
+
+function deleteCustomPalette(pKey) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar esta paleta?`)) {
+        return;
+    }
+    
+    delete colorPalettes[pKey];
+    
+    let stored = localStorage.getItem('custom_color_palettes');
+    if (stored) {
+        try {
+            let custom = JSON.parse(stored);
+            delete custom[pKey];
+            localStorage.setItem('custom_color_palettes', JSON.stringify(custom));
+        } catch(e) {}
+    }
+    
+    showToast("Paleta eliminada correctamente.");
+    
+    if (currentPaletteName === pKey) {
+        selectPalette("default");
+    } else {
+        renderPaletteCards();
     }
 }
 
@@ -2535,12 +2930,12 @@ function applyPaletteUI(pKey) {
 }
 
 function renderPaletteCards() {
-    const grid = document.getElementById('palette-list-grid');
-    if (!grid) return;
+    const recGrid = document.getElementById('palette-list-grid');
+    const myGrid = document.getElementById('my-palettes-list-grid');
     
-    grid.innerHTML = '';
+    if (recGrid) recGrid.innerHTML = '';
+    if (myGrid) myGrid.innerHTML = '';
     
-    // Cargar dinámicamente las paletas recomendadas
     Object.keys(colorPalettes).forEach(pKey => {
         const pal = colorPalettes[pKey];
         const isSelected = currentPaletteName === pKey;
@@ -2583,7 +2978,25 @@ function renderPaletteCards() {
         
         card.appendChild(vHeader);
         card.appendChild(colorStrip);
-        grid.appendChild(card);
+        
+        // Si es personalizada, agregar botón para eliminarla
+        if (pal.isCustom) {
+            card.style.position = 'relative';
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'delete-palette-card-btn';
+            delBtn.innerHTML = '&times;';
+            delBtn.title = 'Eliminar paleta';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteCustomPalette(pKey);
+            };
+            card.appendChild(delBtn);
+            
+            if (myGrid) myGrid.appendChild(card);
+        } else {
+            if (recGrid) recGrid.appendChild(card);
+        }
     });
 }
 

@@ -4,6 +4,38 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 
 ---
 
+## [v2.1.0] — Filtros de Video, Validación y Creador de Paletas de Colores
+
+---
+
+### 🆕 Funcionalidad 1 — Creador de Paletas de Colores Personalizadas
+
+**Archivos:** `web_ui/index.html`, `web_ui/style.css`, `web_ui/app.js`
+
+- **Editor en Tiempo Real:** Interfaz integrada "+ New Palette" que abre un modal con strips de color adaptativos de 3 a 12 colores.
+- **Acciones Hover & Popover:** Los strips de color admiten acciones en hover (editar ✏️, eliminar 🗑️). La edición despliega un popover `#color-edit-popover` posicionado debajo de la acción, con selector de color nativo y campo de texto hexadecimal sincronizados bidireccionalmente.
+- **Generación de Estilos Unificados:** Parser `generateStylesFromColors()` que toma la paleta hexadecimal y la mapea a las propiedades de diseño CSS del Wizard (`minimal`, `dark`, `neon`, `vintage`), así como sus contrapartes RGB correspondientes en Python para el renderizador backend.
+- **Persistencia Local y Backend:** Pestaña "My Palettes" que lee y escribe de `localStorage`, con botón interactivo de eliminación. Al seleccionar la paleta, se inyecta en el diseño actual y se guarda en el archivo `config.json` del proyecto activo.
+
+---
+
+### 🆕 Funcionalidad 2 — Filtros de Video y Colecciones (Paso 3)
+
+**Archivos:** `web_ui/app.js`, `web_ui/index.html`, `web_ui/style.css`
+
+- **Agrupamiento por Subdirectorio:** Se implementó una lógica similar a la de imágenes para escanear las carpetas `base_videos` y `loop_videos` mapeándolas a colecciones por subcarpeta.
+- **Búsqueda y Filtros:** Se incorporaron selectores de colección y barras de búsqueda rápida en tiempo real para simplificar la navegación sobre los videos disponibles.
+
+---
+
+### 🆕 Funcionalidad 3 — Validación de Medios en el Paso 3
+
+**Archivos:** `web_ui/app.js`
+
+- **Validación Dinámica:** Modificación en la función `updateStepAccess()` para habilitar o deshabilitar el botón "Siguiente Paso" (`#step3-next`) según el tipo de fondo activo: requiere al menos una imagen en la galería para el modo Imagen, o al menos un video en la secuencia para el modo Video.
+
+---
+
 ## [v2.0.1] — Corrección de Transcripción Whisper en Proyectos Vacíos
 
 ---
