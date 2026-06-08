@@ -366,8 +366,8 @@ def main():
 
     # ── Validar input ────────────────────────────────────────────────────────
     audio_path = Path(args.audio)
-    if not audio_path.exists():
-        print(f"\n❌  Archivo no encontrado: {audio_path}\n")
+    if not audio_path.exists() or audio_path.stat().st_size == 0:
+        print(f"\n❌  Archivo de audio no encontrado o vacío: {audio_path}\n")
         sys.exit(1)
 
     # ── Dependencias ─────────────────────────────────────────────────────────

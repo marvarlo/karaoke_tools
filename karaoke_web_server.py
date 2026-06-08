@@ -363,8 +363,8 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             info = {
                 "config": config,
                 "status": {
-                    "audio_exists": audio_file.exists(),
-                    "instrumental_exists": (project_path / "instrumental.mp3").exists(),
+                    "audio_exists": audio_file.exists() and audio_file.stat().st_size > 0,
+                    "instrumental_exists": (project_path / "instrumental.mp3").exists() and (project_path / "instrumental.mp3").stat().st_size > 0,
                     "images_count": len(images_list),
                     "words_json_exists": (out_dir / 'words.json').exists(),
                     "words_srt_exists": (out_dir / 'words.srt').exists(),
@@ -397,20 +397,110 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             
             video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
             
-            base_list = []
-            if base_dir.exists():
-                base_list = [f"base_videos/{p.name}" for p in base_dir.iterdir() if p.suffix.lower() in video_exts]
-                base_list.sort()
+            def scan_videos(directory, parent_name):
+                videos = []
+                collections = set()
+                if not directory.exists():
+                    return videos, collections
                 
-            loop_list = []
-            if loop_dir.exists():
-                loop_list = [f"loop_videos/{p.name}" for p in loop_dir.iterdir() if p.suffix.lower() in video_exts]
-                loop_list.sort()
-                
+                for item in sorted(directory.iterdir()):
+                    if item.is_dir():
+                        collection_name = item.name.replace('_', ' ').replace('-', ' ').title()
+                        for sub_item in sorted(item.iterdir()):
+                            if sub_item.is_file() and sub_item.suffix.lower() in video_exts:
+                                collections.add(collection_name)
+                                videos.append({
+                                    "filename": sub_item.name,
+                                    "path": f"{parent_name}/{item.name}/{sub_item.name}",
+                                    "collection": collection_name
+                                })
+                    elif item.is_file() and item.suffix.lower() in video_exts:
+                        collection_name = "General" if parent_name == "base_videos" else "Otros"
+                        collections.add(collection_name)
+                        videos.append({
+                            "filename": item.name,
+                            "path": f"{parent_name}/{item.name}",
+                            "collection": collection_name
+                        })
+                return videos, sorted(list(collections))
+
+            base_videos, base_collections = scan_videos(base_dir, 'base_videos')
+            loop_videos, loop_collections = scan_videos(loop_dir, 'loop_videos')
+            
             return self.send_json({
-                "base_videos": base_list,
-                "loop_videos": loop_list
+                "base_videos": base_videos,
+                "base_collections": base_collections,
+                "loop_videos": loop_videos,
+                "loop_collections": loop_collections
             })
+
+        # Endpoint para listar las imágenes pre-cargadas de base_images/
+        elif path == '/api/base_images':
+            base_dir = WORKSPACE_DIR / 'base_images'
+            img_exts = {'.png', '.jpg', '.jpeg', '.webp'}
+            
+            images = []
+            collections = set()
+            
+            if base_dir.exists():
+                for p in sorted(base_dir.iterdir()):
+                    if p.suffix.lower() not in img_exts:
+                        continue
+                    # Detectar colección a partir del prefijo del nombre
+                    # Ej: "Ciudad-Roja-1.png" -> "Ciudad Roja"
+                    # Ej: "Karaoke_neon_1.png" -> "Karaoke Neon"
+                    stem = p.stem  # nombre sin extensión
+                    # Quitar número final (ej: -1, _1, _2, etc.)
+                    import re
+                    base_name = re.sub(r'[-_]\d+$', '', stem)
+                    # Convertir separadores a espacios y capitalizar cada palabra
+                    collection = ' '.join(
+                        word.capitalize()
+                        for word in re.split(r'[-_]', base_name)
+                        if word
+                    )
+                    collections.add(collection)
+                    images.append({
+                        "filename": p.name,
+                        "path": f"base_images/{p.name}",
+                        "collection": collection
+                    })
+            
+            return self.send_json({
+                "images": images,
+                "collections": sorted(collections)
+            })
+
+        # Endpoint para servir archivos de imagen de base_images/ (para miniaturas)
+        elif path == '/api/base_image_file':
+            filename = query.get('filename', [''])[0]
+            if not filename:
+                return self.send_error_json("Falta el parámetro 'filename'")
+            
+            # Prevenir path traversal — solo nombre de archivo, no rutas
+            if '/' in filename or '\\' in filename or '..' in filename:
+                return self.send_error_json("Nombre de archivo no válido", 403)
+            
+            filepath = (WORKSPACE_DIR / 'base_images' / filename).resolve()
+            
+            # Verificar que esté dentro de base_images/
+            try:
+                filepath.relative_to((WORKSPACE_DIR / 'base_images').resolve())
+            except ValueError:
+                return self.send_error_json("Acceso no autorizado", 403)
+            
+            if not filepath.exists() or filepath.is_dir():
+                return self.send_error_json("Imagen no encontrada", 404)
+            
+            self.send_response(200)
+            mime, _ = mimetypes.guess_type(str(filepath))
+            self.send_header('Content-Type', mime or 'image/png')
+            self.send_header('Cache-Control', 'max-age=3600')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open(filepath, 'rb') as f:
+                self.wfile.write(f.read())
+            return
 
         elif path == '/api/video_file':
             filepath_str = query.get('path', [''])[0]
@@ -839,6 +929,43 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             else:
                 return self.send_error_json("Imagen no encontrada")
 
+        # ── COPIAR IMAGEN DE BIBLIOTECA BASE AL PROYECTO ──────────────────────
+        elif path == '/api/copy_base_image':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+            
+            project_name = data.get('project')
+            filename = data.get('filename')
+            
+            if not project_name or not filename:
+                return self.send_error_json("Parámetros incorrectos")
+            
+            # Prevenir path traversal
+            if '/' in filename or '\\' in filename or '..' in filename:
+                return self.send_error_json("Nombre de archivo no válido", 403)
+            
+            src = (WORKSPACE_DIR / 'base_images' / filename).resolve()
+            
+            # Verificar seguridad
+            try:
+                src.relative_to((WORKSPACE_DIR / 'base_images').resolve())
+            except ValueError:
+                return self.send_error_json("Acceso no autorizado", 403)
+            
+            if not src.exists() or src.is_dir():
+                return self.send_error_json("Imagen base no encontrada", 404)
+            
+            images_dir = WORKSPACE_DIR / project_name / 'images'
+            images_dir.mkdir(exist_ok=True)
+            dest = images_dir / filename
+            
+            # Copiar solo si no existe ya (idempotente)
+            if not dest.exists():
+                shutil.copy2(src, dest)
+            
+            return self.send_json({"ok": True, "filename": filename})
+
         # ── GUARDAR MAPA (JSON) ───────────────────────────────────────────────
         elif path == '/api/map':
             content_length = int(self.headers.get('Content-Length', 0))
@@ -961,6 +1088,9 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
             
+            if not audio_path.exists() or audio_path.stat().st_size == 0:
+                return self.send_error_json("El archivo de audio no existe o está vacío. Por favor sube un archivo de audio válido en el Paso 1.")
+            
             # Limpiar pistas anteriores si existen
             instrumental_file = project_path / 'instrumental.mp3'
             vocals_file = project_path / 'vocals.mp3'
@@ -998,6 +1128,11 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             
             use_vocals = query.get('use_vocals', ['false'])[0] == 'true'
             cfg['transcribe_from_vocals'] = use_vocals
+            
+            # Leer el modelo enviado en el query (fallback al que ya está en config o a medium)
+            model = query.get('model', [cfg.get('whisper_model', 'medium')])[0]
+            cfg['whisper_model'] = model
+            
             try:
                 cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
             except Exception as e:
@@ -1007,8 +1142,12 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
             if use_vocals:
                 vocals_path = project_path / 'vocals.mp3'
-                if vocals_path.exists():
-                    audio_path = vocals_path
+                if not vocals_path.exists() or vocals_path.stat().st_size == 0:
+                    return self.send_error_json("No se encontró el archivo de voz limpia (vocals.mp3) o está vacío. Por favor realiza la separación de audio primero.")
+                audio_path = vocals_path
+            else:
+                if not audio_path.exists() or audio_path.stat().st_size == 0:
+                    return self.send_error_json("El archivo de audio no existe o está vacío. Por favor sube un archivo de audio válido en el Paso 1.")
                     
             total_duration = 200.0 # fallback por defecto (3:20 mins)
             try:

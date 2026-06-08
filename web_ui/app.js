@@ -10,6 +10,8 @@ let selectedStyle = "minimal";
 let currentPaletteName = "default";
 let statusInterval = null;
 let systemFonts = [];
+let baseVideosData = null;
+let loopVideosData = null;
 
 // ELEMENTOS DOM COMUNES
 const projectSelect = document.getElementById('project-select');
@@ -304,6 +306,8 @@ async function handleProjectChange(projectName) {
         } else {
             if (imgSection) imgSection.style.display = 'block';
             if (vidSection) vidSection.style.display = 'none';
+            // Cargar la biblioteca de imágenes base
+            loadBaseImages();
         }
 
         // Cargar editor de letras si ya está transcribido
@@ -395,12 +399,15 @@ function updateStepAccess() {
         document.getElementById('step2-next').setAttribute('disabled', 'true');
     }
 
-    // Nodo 4 (Mapeo) requiere que words_srt existan. En modo video, también requiere que haya al menos 1 video en la secuencia.
+    // Nodo 4 (Mapeo) requiere que words_srt existan.
+    // Además: en modo video requiere al menos 1 video. En modo imagen requiere al menos 1 imagen.
     const node4 = document.getElementById('node-4');
     const isVideoMode = (projectConfig && projectConfig.background_type === 'video');
     const hasVideos = projectConfig && projectConfig.video_backgrounds && projectConfig.video_backgrounds.length > 0;
+    const hasImages = projectImages && projectImages.length > 0;
+    const hasBackgroundSelected = isVideoMode ? hasVideos : hasImages;
 
-    if (projectStatus.words_srt_exists && (!isVideoMode || hasVideos)) {
+    if (projectStatus.words_srt_exists && hasBackgroundSelected) {
         node4.classList.remove('disabled');
         document.getElementById('step3-next').removeAttribute('disabled');
     } else {
@@ -567,8 +574,11 @@ async function startWhisper() {
     const useVocalsInput = document.getElementById('whisper-use-vocals');
     const useVocals = useVocalsInput ? useVocalsInput.checked : false;
 
+    const whisperModelSelect = document.getElementById('p-whisper');
+    const whisperModel = whisperModelSelect ? whisperModelSelect.value : 'medium';
+
     try {
-        const res = await fetch(`/api/run_whisper?project=${currentProject}&use_vocals=${useVocals}`, { method: 'POST' });
+        const res = await fetch(`/api/run_whisper?project=${currentProject}&use_vocals=${useVocals}&model=${whisperModel}`, { method: 'POST' });
         const data = await res.json();
 
         if (data.error) {
@@ -715,11 +725,13 @@ async function checkCurrentTaskRunning() {
 // ──────────────────────────────────────────────────────────────────────────────
 function updateImagesGallery() {
     const gallery = document.getElementById('images-gallery');
-    const galleryCount = document.getElementById('gallery-count');
-    galleryCount.innerText = projectImages.length;
+    const badge = document.getElementById('gallery-count-badge');
+    if (badge) badge.innerText = `${projectImages.length} imagen${projectImages.length !== 1 ? 'es' : ''}`;
 
     if (projectImages.length === 0) {
-        gallery.innerHTML = '<div class="gallery-empty-message">Aún no has subido imágenes. ¡Arrastra archivos arriba!</div>';
+        gallery.innerHTML = '<div class="gallery-empty-message">Agrega imágenes de la biblioteca de abajo o sube las tuyas propias. ¡Arrástralas aquí!</div>';
+        // Actualizar estado "ya agregada" en la biblioteca base (si está cargada)
+        refreshBaseImagesAddedState();
         return;
     }
 
@@ -731,6 +743,7 @@ function updateImagesGallery() {
         const img = document.createElement('img');
         img.src = `/api/image_file?project=${currentProject}&file=${imgName}`;
         img.alt = imgName;
+        img.loading = 'lazy';
 
         const label = document.createElement('div');
         label.className = 'gallery-item-name';
@@ -749,6 +762,181 @@ function updateImagesGallery() {
         item.appendChild(label);
         item.appendChild(deleteBtn);
         gallery.appendChild(item);
+    });
+
+    // Actualizar estado "ya agregada" en la biblioteca base
+    refreshBaseImagesAddedState();
+}
+
+// Variable de control para no recargar innecesariamente la biblioteca base
+let baseImagesData = null;
+
+async function loadBaseImages() {
+    try {
+        const res = await fetch('/api/base_images');
+        const data = await res.json();
+        baseImagesData = data;
+
+        // Rellenar el filtro de colecciones
+        const collectionFilter = document.getElementById('base-images-collection-filter');
+        if (collectionFilter) {
+            collectionFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                collectionFilter.appendChild(opt);
+            });
+        }
+
+        // Actualizar badge de conteo
+        const countBadge = document.getElementById('base-images-count-badge');
+        if (countBadge) countBadge.innerText = `${data.images.length} imágenes`;
+
+        // Renderizar la cuadrícula
+        renderBaseImagesGrid(data.images);
+    } catch (e) {
+        console.error('Error al cargar imágenes base:', e);
+        const grid = document.getElementById('base-images-grid');
+        if (grid) grid.innerHTML = '<div class="gallery-empty-message">Error al cargar la biblioteca.</div>';
+    }
+}
+
+function renderBaseImagesGrid(images) {
+    const grid = document.getElementById('base-images-grid');
+    if (!grid) return;
+
+    if (!images || images.length === 0) {
+        grid.innerHTML = '<div class="gallery-empty-message">No hay imágenes disponibles.</div>';
+        return;
+    }
+
+    grid.innerHTML = '';
+    images.forEach(imgObj => {
+        const card = createBaseImageCard(imgObj);
+        grid.appendChild(card);
+    });
+}
+
+function createBaseImageCard(imgObj) {
+    const isAdded = projectImages.includes(imgObj.filename);
+
+    const card = document.createElement('div');
+    card.className = 'base-image-card' + (isAdded ? ' already-added' : '');
+    card.dataset.filename = imgObj.filename;
+    card.dataset.collection = imgObj.collection;
+
+    // Miniatura
+    const img = document.createElement('img');
+    img.src = `/api/base_image_file?filename=${encodeURIComponent(imgObj.filename)}`;
+    img.alt = imgObj.filename;
+    img.loading = 'lazy';
+
+    // Badge de colección
+    const colBadge = document.createElement('span');
+    colBadge.className = 'base-img-collection-badge';
+    colBadge.innerText = imgObj.collection;
+
+    // Overlay de acción (aparece en hover)
+    const overlay = document.createElement('div');
+    overlay.className = 'base-img-overlay';
+
+    if (isAdded) {
+        overlay.innerHTML = '<span class="base-img-added-check">✅ Ya en proyecto</span>';
+    } else {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'base-img-add-btn';
+        addBtn.innerText = '➕ Agregar';
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            copyBaseImageToProject(imgObj.filename);
+        };
+        overlay.appendChild(addBtn);
+    }
+
+    // Nombre del archivo
+    const nameLabel = document.createElement('div');
+    nameLabel.className = 'base-img-name';
+    nameLabel.innerText = imgObj.filename;
+    nameLabel.title = imgObj.filename;
+
+    card.appendChild(img);
+    card.appendChild(colBadge);
+    card.appendChild(overlay);
+    card.appendChild(nameLabel);
+
+    return card;
+}
+
+async function copyBaseImageToProject(filename) {
+    if (!currentProject) return;
+
+    try {
+        const res = await fetch('/api/copy_base_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: currentProject, filename })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            showToast(data.error, 'error');
+        } else {
+            showToast(`"${filename}" agregada al proyecto.`);
+            // Recargar estado del proyecto para actualizar la galería
+            const infoRes = await fetch(`/api/info?project=${currentProject}`);
+            const infoData = await infoRes.json();
+            projectImages = infoData.images;
+            updateImagesGallery();
+            updateStepAccess();
+        }
+    } catch (e) {
+        showToast('Error al agregar la imagen al proyecto', 'error');
+    }
+}
+
+function filterBaseImages() {
+    if (!baseImagesData) return;
+
+    const collectionVal = (document.getElementById('base-images-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('base-images-search')?.value || '').toLowerCase();
+
+    const filtered = baseImagesData.images.filter(img => {
+        const matchCollection = !collectionVal || img.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || img.filename.toLowerCase().includes(searchVal) || img.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+
+    renderBaseImagesGrid(filtered);
+}
+
+function refreshBaseImagesAddedState() {
+    // Actualiza las tarjetas de la biblioteca base para reflejar cuáles ya están en el proyecto
+    const grid = document.getElementById('base-images-grid');
+    if (!grid || !baseImagesData) return;
+
+    grid.querySelectorAll('.base-image-card').forEach(card => {
+        const filename = card.dataset.filename;
+        const isAdded = projectImages.includes(filename);
+        if (isAdded) {
+            card.classList.add('already-added');
+            const overlay = card.querySelector('.base-img-overlay');
+            if (overlay) overlay.innerHTML = '<span class="base-img-added-check">✅ Ya en proyecto</span>';
+        } else {
+            card.classList.remove('already-added');
+            const overlay = card.querySelector('.base-img-overlay');
+            if (overlay && !overlay.querySelector('.base-img-add-btn')) {
+                overlay.innerHTML = '';
+                const addBtn = document.createElement('button');
+                addBtn.className = 'base-img-add-btn';
+                addBtn.innerText = '➕ Agregar';
+                addBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    copyBaseImageToProject(filename);
+                };
+                overlay.appendChild(addBtn);
+            }
+        }
     });
 }
 
@@ -809,6 +997,8 @@ function toggleBackgroundType(type) {
     } else {
         if (imgSection) imgSection.style.display = 'block';
         if (vidSection) vidSection.style.display = 'none';
+        // Cargar la biblioteca de imágenes base al cambiar a modo imagen
+        loadBaseImages();
     }
 
     updateStepAccess();
@@ -839,7 +1029,8 @@ async function handleVideosUpload(event) {
                 projectConfig.video_backgrounds.push(data.filename);
                 await saveConfigSilent();
             }
-            updateBackgroundVideos();
+            await updateBackgroundVideos();
+            updateStepAccess();
         }
     } catch (e) {
         showToast(`Error al subir el video ${file.name}`, "error");
@@ -852,36 +1043,43 @@ async function updateBackgroundVideos() {
     try {
         const res = await fetch(`/api/background_videos?project=${currentProject}`);
         const data = await res.json();
+        
+        baseVideosData = data.base_videos || [];
+        loopVideosData = data.loop_videos || [];
 
-        // Renderizar base videos
-        const baseList = document.getElementById('base-videos-list');
-        if (baseList) {
-            baseList.innerHTML = '';
-            if (!data.base_videos || data.base_videos.length === 0) {
-                baseList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos base disponibles.</div>';
-            } else {
-                data.base_videos.forEach(vPath => {
-                    const filename = vPath.split('/').pop();
-                    const card = createVideoCard(vPath, filename, 'base');
-                    baseList.appendChild(card);
-                });
-            }
+        // Rellenar el filtro de colecciones base
+        const baseFilter = document.getElementById('base-videos-collection-filter');
+        if (baseFilter) {
+            baseFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.base_collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                baseFilter.appendChild(opt);
+            });
         }
 
-        // Renderizar loop videos
-        const loopList = document.getElementById('loop-videos-list');
-        if (loopList) {
-            loopList.innerHTML = '';
-            if (!data.loop_videos || data.loop_videos.length === 0) {
-                loopList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos de loop disponibles.</div>';
-            } else {
-                data.loop_videos.forEach(vPath => {
-                    const filename = vPath.split('/').pop();
-                    const card = createVideoCard(vPath, filename, 'loop');
-                    loopList.appendChild(card);
-                });
-            }
+        // Rellenar el filtro de colecciones loop
+        const loopFilter = document.getElementById('loop-videos-collection-filter');
+        if (loopFilter) {
+            loopFilter.innerHTML = '<option value="">Todas las colecciones</option>';
+            (data.loop_collections || []).forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                loopFilter.appendChild(opt);
+            });
         }
+
+        // Reset inputs de búsqueda
+        const baseSearch = document.getElementById('base-videos-search');
+        if (baseSearch) baseSearch.value = '';
+        const loopSearch = document.getElementById('loop-videos-search');
+        if (loopSearch) loopSearch.value = '';
+
+        // Renderizar listas completas inicialmente
+        renderBaseVideosList(baseVideosData);
+        renderLoopVideosList(loopVideosData);
 
         updateVideoSequenceUI();
     } catch (e) {
@@ -889,7 +1087,65 @@ async function updateBackgroundVideos() {
     }
 }
 
-function createVideoCard(vPath, filename, type) {
+function renderBaseVideosList(videos) {
+    const baseList = document.getElementById('base-videos-list');
+    if (!baseList) return;
+    
+    baseList.innerHTML = '';
+    if (!videos || videos.length === 0) {
+        baseList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos base disponibles.</div>';
+    } else {
+        videos.forEach(vObj => {
+            const card = createVideoCard(vObj, 'base');
+            baseList.appendChild(card);
+        });
+    }
+}
+
+function renderLoopVideosList(videos) {
+    const loopList = document.getElementById('loop-videos-list');
+    if (!loopList) return;
+    
+    loopList.innerHTML = '';
+    if (!videos || videos.length === 0) {
+        loopList.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 10px;">No hay videos de loop disponibles.</div>';
+    } else {
+        videos.forEach(vObj => {
+            const card = createVideoCard(vObj, 'loop');
+            loopList.appendChild(card);
+        });
+    }
+}
+
+function filterBaseVideos() {
+    if (!baseVideosData) return;
+    const collectionVal = (document.getElementById('base-videos-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('base-videos-search')?.value || '').toLowerCase();
+    const filtered = baseVideosData.filter(v => {
+        const matchCollection = !collectionVal || v.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || v.filename.toLowerCase().includes(searchVal) || v.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+    renderBaseVideosList(filtered);
+}
+
+function filterLoopVideos() {
+    if (!loopVideosData) return;
+    const collectionVal = (document.getElementById('loop-videos-collection-filter')?.value || '').toLowerCase();
+    const searchVal = (document.getElementById('loop-videos-search')?.value || '').toLowerCase();
+    const filtered = loopVideosData.filter(v => {
+        const matchCollection = !collectionVal || v.collection.toLowerCase() === collectionVal;
+        const matchSearch = !searchVal || v.filename.toLowerCase().includes(searchVal) || v.collection.toLowerCase().includes(searchVal);
+        return matchCollection && matchSearch;
+    });
+    renderLoopVideosList(filtered);
+}
+
+function createVideoCard(videoObj, type) {
+    const vPath = videoObj.path;
+    const filename = videoObj.filename;
+    const collection = videoObj.collection;
+
     const card = document.createElement('div');
     card.className = 'video-item-card';
 
@@ -907,8 +1163,21 @@ function createVideoCard(vPath, filename, type) {
     const badge = document.createElement('span');
     badge.className = `badge-video-source badge-${type}`;
     badge.innerText = type === 'base' ? 'base' : 'loop';
-
     meta.appendChild(badge);
+
+    if (collection) {
+        const colBadge = document.createElement('span');
+        colBadge.className = 'badge-video-collection';
+        colBadge.innerText = collection;
+        colBadge.style.marginLeft = '5px';
+        colBadge.style.fontSize = '0.7rem';
+        colBadge.style.background = 'rgba(255, 255, 255, 0.05)';
+        colBadge.style.padding = '2px 6px';
+        colBadge.style.borderRadius = '4px';
+        colBadge.style.color = 'var(--text-muted)';
+        meta.appendChild(colBadge);
+    }
+
     info.appendChild(name);
     info.appendChild(meta);
 
@@ -2200,7 +2469,49 @@ const colorPalettes = {
     }
 };
 
+// VARIABLES GLOBALES DEL CREADOR DE PALETAS
+let customPaletteColors = [];
+let activeEditColorIndex = -1;
+let activeEditPaletteKey = null;
+
+function switchPaletteTab(tab) {
+    const tabAll = document.getElementById('tab-all-palettes');
+    const tabMy = document.getElementById('tab-my-palettes');
+    const viewAll = document.getElementById('all-palettes-view');
+    const viewMy = document.getElementById('my-palettes-view');
+    
+    if (tab === 'all') {
+        if (tabAll) tabAll.classList.add('active');
+        if (tabMy) tabMy.classList.remove('active');
+        if (viewAll) viewAll.style.display = 'block';
+        if (viewMy) viewMy.style.display = 'none';
+    } else {
+        if (tabAll) tabAll.classList.remove('active');
+        if (tabMy) tabMy.classList.add('active');
+        if (viewAll) viewAll.style.display = 'none';
+        if (viewMy) viewMy.style.display = 'block';
+    }
+}
+
+function loadCustomPalettesFromStorage() {
+    const stored = localStorage.getItem('custom_color_palettes');
+    if (stored) {
+        try {
+            const custom = JSON.parse(stored);
+            Object.keys(custom).forEach(key => {
+                custom[key].isCustom = true;
+                colorPalettes[key] = custom[key];
+            });
+        } catch (e) {
+            console.error("Error al cargar paletas del localStorage:", e);
+        }
+    }
+}
+
 function setupPaletteHandlers() {
+    // Cargar paletas del localStorage
+    loadCustomPalettesFromStorage();
+
     const openBtn = document.getElementById('open-palette-btn');
     const closeBtn = document.getElementById('close-palette-modal');
     const modal = document.getElementById('palette-modal');
@@ -2208,6 +2519,7 @@ function setupPaletteHandlers() {
     if (openBtn) {
         openBtn.addEventListener('click', () => {
             renderPaletteCards();
+            switchPaletteTab('all');
             modal.style.display = 'flex';
         });
     }
@@ -2224,6 +2536,407 @@ function setupPaletteHandlers() {
                 modal.style.display = 'none';
             }
         });
+    }
+
+    // --- NUEVOS HANDLERS DEL CREADOR DE PALETAS ---
+    const newPaletteBtn = document.getElementById('new-palette-btn');
+    const createModal = document.getElementById('create-palette-modal');
+    const closeCreateModal = document.getElementById('close-create-palette-modal');
+    const cancelCreateBtn = document.getElementById('cancel-create-palette-btn');
+    const confirmCreateBtn = document.getElementById('confirm-create-palette-btn');
+    const decBtn = document.getElementById('decrease-colors-btn');
+    const incBtn = document.getElementById('increase-colors-btn');
+    
+    if (newPaletteBtn) {
+        newPaletteBtn.addEventListener('click', () => {
+            openCreatePaletteModal();
+        });
+    }
+    
+    if (closeCreateModal) {
+        closeCreateModal.addEventListener('click', () => {
+            createModal.style.display = 'none';
+            closeColorEditPopover();
+            activeEditPaletteKey = null;
+        });
+    }
+    
+    if (cancelCreateBtn) {
+        cancelCreateBtn.addEventListener('click', () => {
+            createModal.style.display = 'none';
+            closeColorEditPopover();
+            activeEditPaletteKey = null;
+        });
+    }
+    
+    if (confirmCreateBtn) {
+        confirmCreateBtn.addEventListener('click', () => {
+            saveCustomPalette();
+        });
+    }
+    
+    if (decBtn) {
+        decBtn.addEventListener('click', () => {
+            if (customPaletteColors.length > 3) {
+                customPaletteColors.pop();
+                closeColorEditPopover();
+                renderCustomPaletteStrips();
+                updateColorsCountLabel();
+            }
+        });
+    }
+    
+    if (incBtn) {
+        incBtn.addEventListener('click', () => {
+            if (customPaletteColors.length < 12) {
+                const lastColor = customPaletteColors[customPaletteColors.length - 1] || '#ffffff';
+                customPaletteColors.push(lastColor);
+                closeColorEditPopover();
+                renderCustomPaletteStrips();
+                updateColorsCountLabel();
+            }
+        });
+    }
+
+    // Popover OK Button
+    const popoverOk = document.getElementById('popover-ok-btn');
+    if (popoverOk) {
+        popoverOk.addEventListener('click', () => {
+            closeColorEditPopover();
+        });
+    }
+    
+    // Sincronizar picker flotante
+    const pickerInput = document.getElementById('popover-color-picker');
+    const hexInput = document.getElementById('popover-color-hex');
+    
+    if (pickerInput && hexInput) {
+        pickerInput.addEventListener('input', (e) => {
+            const val = e.target.value.toUpperCase();
+            hexInput.value = val;
+            updateEditColor(val);
+        });
+        
+        hexInput.addEventListener('input', (e) => {
+            let val = e.target.value.trim();
+            if (!val.startsWith('#') && val.length > 0) {
+                val = '#' + val;
+            }
+            if (/^#[0-9A-F]{6}$/i.test(val)) {
+                pickerInput.value = val;
+                updateEditColor(val);
+            }
+        });
+    }
+}
+
+function openCreatePaletteModal(pKey = null) {
+    const createModal = document.getElementById('create-palette-modal');
+    if (!createModal) return;
+    
+    activeEditPaletteKey = pKey;
+    const titleEl = createModal.querySelector('h3');
+    
+    if (pKey && colorPalettes[pKey]) {
+        // Modo edición
+        customPaletteColors = [...colorPalettes[pKey].colors];
+        document.getElementById('custom-palette-name').value = colorPalettes[pKey].name;
+        if (titleEl) titleEl.innerText = "Edit Color Palette";
+    } else {
+        // Modo creación
+        customPaletteColors = ['#FFFFFF', '#F4F5F8', '#E2E5EC', '#CFD3E0', '#B6BAD1', '#989DB5', '#7A7E9B', '#484B64'];
+        document.getElementById('custom-palette-name').value = "My Palette";
+        if (titleEl) titleEl.innerText = "Create Color Palette";
+    }
+    
+    closeColorEditPopover();
+    renderCustomPaletteStrips();
+    updateColorsCountLabel();
+    
+    createModal.style.display = 'flex';
+}
+
+function updateColorsCountLabel() {
+    const label = document.getElementById('colors-count-label');
+    if (label) {
+        label.innerText = `${customPaletteColors.length} Colors`;
+    }
+    
+    const decBtn = document.getElementById('decrease-colors-btn');
+    const incBtn = document.getElementById('increase-colors-btn');
+    
+    if (decBtn) decBtn.disabled = (customPaletteColors.length <= 3);
+    if (incBtn) incBtn.disabled = (customPaletteColors.length >= 12);
+}
+
+function renderCustomPaletteStrips() {
+    const container = document.getElementById('custom-palette-strips-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    const L = customPaletteColors.length;
+    const pct = Math.round(100 / L);
+    
+    customPaletteColors.forEach((color, idx) => {
+        const strip = document.createElement('div');
+        strip.className = 'custom-color-strip';
+        strip.style.backgroundColor = color;
+        strip.dataset.index = idx;
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'strip-overlay';
+        
+        const hexBadge = document.createElement('div');
+        hexBadge.className = 'strip-hex-badge';
+        hexBadge.innerText = color.toUpperCase();
+        
+        const actions = document.createElement('div');
+        actions.className = 'strip-actions-row';
+        
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'strip-action-btn edit-btn';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Editar color';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            openColorEditPopover(idx, editBtn);
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'strip-action-btn delete-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Eliminar color';
+        deleteBtn.disabled = (L <= 3);
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteColorFromCustom(idx);
+        };
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+        overlay.appendChild(hexBadge);
+        overlay.appendChild(actions);
+        
+        const pctText = document.createElement('div');
+        pctText.className = 'strip-pct';
+        pctText.innerText = `${pct}%`;
+        
+        strip.appendChild(overlay);
+        strip.appendChild(pctText);
+        container.appendChild(strip);
+    });
+}
+
+function openColorEditPopover(index, buttonEl) {
+    const popover = document.getElementById('color-edit-popover');
+    const picker = document.getElementById('popover-color-picker');
+    const hex = document.getElementById('popover-color-hex');
+    const wrapper = document.getElementById('custom-palette-strips-wrapper');
+    
+    if (!popover || !picker || !hex || !wrapper) return;
+    
+    activeEditColorIndex = index;
+    const color = customPaletteColors[index];
+    
+    picker.value = color;
+    hex.value = color.toUpperCase();
+    
+    // Posicionar flotante respecto al botón clicado
+    const rect = buttonEl.getBoundingClientRect();
+    const parentRect = wrapper.getBoundingClientRect();
+    
+    popover.style.display = 'flex';
+    
+    const leftPos = rect.left - parentRect.left + rect.width / 2 - popover.offsetWidth / 2;
+    popover.style.left = `${Math.max(5, Math.min(parentRect.width - popover.offsetWidth - 5, leftPos))}px`;
+    popover.style.top = `${rect.bottom - parentRect.top + 8}px`;
+}
+
+function closeColorEditPopover() {
+    const popover = document.getElementById('color-edit-popover');
+    if (popover) popover.style.display = 'none';
+    activeEditColorIndex = -1;
+}
+
+function updateEditColor(val) {
+    if (activeEditColorIndex === -1) return;
+    customPaletteColors[activeEditColorIndex] = val;
+    
+    const strip = document.querySelector(`.custom-color-strip[data-index="${activeEditColorIndex}"]`);
+    if (strip) {
+        strip.style.backgroundColor = val;
+        const badge = strip.querySelector('.strip-hex-badge');
+        if (badge) badge.innerText = val.toUpperCase();
+    }
+}
+
+function deleteColorFromCustom(index) {
+    if (customPaletteColors.length <= 3) return;
+    
+    customPaletteColors.splice(index, 1);
+    closeColorEditPopover();
+    renderCustomPaletteStrips();
+    updateColorsCountLabel();
+}
+
+function hexToRgb(hex) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+    const num = parseInt(hex, 16);
+    return [
+        (num >> 16) & 255,
+        (num >> 8) & 255,
+        num & 255
+    ];
+}
+
+function generateStylesFromColors(colors) {
+    const active0 = colors[0];
+    const sung0 = colors[1] || '#FFFFFF';
+    const unsung0 = colors[2] || '#464646';
+    const active1 = colors[3] || active0;
+    const sung1 = colors[4] || sung0;
+    const bg_color = colors[colors.length - 1] || '#0A0813';
+    
+    const actRgb = hexToRgb(active0);
+    const sungRgb = hexToRgb(sung0);
+    const unsungRgb = hexToRgb(unsung0);
+    
+    const adjRgb = [Math.round(unsungRgb[0] * 0.7), Math.round(unsungRgb[1] * 0.7), Math.round(unsungRgb[2] * 0.7)];
+    const bgRgb = hexToRgb(bg_color);
+    
+    return {
+        "minimal": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, ${bg_color} 0%, #111111 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.68, overlay: 110, bg_color: bgRgb }
+        },
+        "dark": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, #050505 0%, ${bg_color} 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.48, overlay: 165, bg_color: bgRgb }
+        },
+        "neon": {
+            active: active1,
+            sung: sung1,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, #000000 0%, ${bg_color} 100%)`,
+            python: { active: hexToRgb(active1), sung: hexToRgb(sung1), unsung: unsungRgb, adj: adjRgb, bg: 0.35, overlay: 185, bg_color: bgRgb }
+        },
+        "vintage": {
+            active: active0,
+            sung: sung0,
+            unsung: unsung0,
+            bg: `linear-gradient(135deg, ${bg_color} 0%, #3d3428 100%)`,
+            python: { active: actRgb, sung: sungRgb, unsung: unsungRgb, adj: adjRgb, bg: 0.60, overlay: 125, bg_color: bgRgb }
+        }
+    };
+}
+
+let pendingDeletePaletteKey = null;
+
+function saveCustomPalette() {
+    const nameInput = document.getElementById('custom-palette-name');
+    let name = nameInput ? nameInput.value.trim() : "";
+    if (!name) name = "My Palette";
+    
+    const key = activeEditPaletteKey || `custom_${Date.now()}`;
+    const colors = [...customPaletteColors];
+    const styles = generateStylesFromColors(colors);
+    
+    const newPalette = {
+        name: name,
+        isCustom: true,
+        headerBg: `linear-gradient(135deg, ${colors[0]} 0%, ${colors[colors.length-1]} 100%)`,
+        colors: colors,
+        styles: styles
+    };
+    
+    colorPalettes[key] = newPalette;
+    
+    let stored = localStorage.getItem('custom_color_palettes');
+    let custom = {};
+    if (stored) {
+        try {
+            custom = JSON.parse(stored);
+        } catch(e) {}
+    }
+    custom[key] = newPalette;
+    localStorage.setItem('custom_color_palettes', JSON.stringify(custom));
+    
+    if (activeEditPaletteKey) {
+        showToast(`Custom palette "${name}" updated.`);
+        if (currentPaletteName === key) {
+            applyPaletteUI(key);
+            const activeCard = document.querySelector(`.style-card[data-style="${selectedStyle}"]`);
+            if (activeCard) {
+                activeCard.click();
+            }
+        }
+    } else {
+        showToast(`Custom palette "${name}" created.`);
+    }
+    
+    activeEditPaletteKey = null;
+    
+    document.getElementById('create-palette-modal').style.display = 'none';
+    closeColorEditPopover();
+    
+    renderPaletteCards();
+    switchPaletteTab('my');
+}
+
+function deleteCustomPalette(pKey, buttonEl) {
+    if (pendingDeletePaletteKey !== pKey) {
+        const prevPendingBtn = document.querySelector('.delete-palette-card-btn.confirm-delete');
+        if (prevPendingBtn) {
+            prevPendingBtn.innerHTML = '&times;';
+            prevPendingBtn.title = 'Eliminar paleta';
+            prevPendingBtn.classList.remove('confirm-delete');
+        }
+        
+        pendingDeletePaletteKey = pKey;
+        buttonEl.innerHTML = '⚠️';
+        buttonEl.title = 'Hacer clic de nuevo para confirmar';
+        buttonEl.classList.add('confirm-delete');
+        
+        setTimeout(() => {
+            if (pendingDeletePaletteKey === pKey) {
+                pendingDeletePaletteKey = null;
+                buttonEl.innerHTML = '&times;';
+                buttonEl.title = 'Eliminar paleta';
+                buttonEl.classList.remove('confirm-delete');
+            }
+        }, 3000);
+        return;
+    }
+    
+    pendingDeletePaletteKey = null;
+    delete colorPalettes[pKey];
+    
+    let stored = localStorage.getItem('custom_color_palettes');
+    if (stored) {
+        try {
+            let custom = JSON.parse(stored);
+            delete custom[pKey];
+            localStorage.setItem('custom_color_palettes', JSON.stringify(custom));
+        } catch(e) {}
+    }
+    
+    showToast("Paleta eliminada correctamente.");
+    
+    if (currentPaletteName === pKey) {
+        selectPalette("default");
+    } else {
+        renderPaletteCards();
     }
 }
 
@@ -2269,12 +2982,12 @@ function applyPaletteUI(pKey) {
 }
 
 function renderPaletteCards() {
-    const grid = document.getElementById('palette-list-grid');
-    if (!grid) return;
+    const recGrid = document.getElementById('palette-list-grid');
+    const myGrid = document.getElementById('my-palettes-list-grid');
     
-    grid.innerHTML = '';
+    if (recGrid) recGrid.innerHTML = '';
+    if (myGrid) myGrid.innerHTML = '';
     
-    // Cargar dinámicamente las paletas recomendadas
     Object.keys(colorPalettes).forEach(pKey => {
         const pal = colorPalettes[pKey];
         const isSelected = currentPaletteName === pKey;
@@ -2289,7 +3002,6 @@ function renderPaletteCards() {
             card.style.boxShadow = `0 0 15px ${primaryColor}60`;
         }
         
-        // Cabecera visual (imagen con fallback de gradiente)
         const vHeader = document.createElement('div');
         vHeader.className = 'palette-visual-header';
         if (pal.image) {
@@ -2298,7 +3010,6 @@ function renderPaletteCards() {
             vHeader.style.background = pal.headerBg;
         }
         
-        // Franja de colores
         const colorStrip = document.createElement('div');
         colorStrip.className = 'palette-color-strip';
         
@@ -2309,7 +3020,6 @@ function renderPaletteCards() {
             colorStrip.appendChild(block);
         });
         
-        // Nombre superpuesto
         const nameOverlay = document.createElement('div');
         nameOverlay.className = 'palette-name-overlay';
         nameOverlay.innerText = pal.name;
@@ -2317,7 +3027,36 @@ function renderPaletteCards() {
         
         card.appendChild(vHeader);
         card.appendChild(colorStrip);
-        grid.appendChild(card);
+        
+        if (pal.isCustom) {
+            card.style.position = 'relative';
+            
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'edit-palette-card-btn';
+            editBtn.innerHTML = '✏️';
+            editBtn.title = 'Editar paleta';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                openCreatePaletteModal(pKey);
+            };
+            card.appendChild(editBtn);
+            
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'delete-palette-card-btn';
+            delBtn.innerHTML = '&times;';
+            delBtn.title = 'Eliminar paleta';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteCustomPalette(pKey, delBtn);
+            };
+            card.appendChild(delBtn);
+            
+            if (myGrid) myGrid.appendChild(card);
+        } else {
+            if (recGrid) recGrid.appendChild(card);
+        }
     });
 }
 
