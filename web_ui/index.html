@@ -528,6 +528,75 @@ El modelo RoFormer se descargará y procesará el audio para generar la instrume
                             </div>
                         </div>
 
+                        <!-- OPCIONES DE INTRO / OUTRO / WATERMARK / FADE -->
+                        <div class="advanced-section glass-panel" style="margin-top: 20px; margin-bottom: 25px; padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); text-align: left;">
+                            <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--accent-gold); display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 600;">
+                                ⚙️ Configuración Avanzada de Video
+                            </h4>
+                            
+                            <div class="form-row split-2" style="margin-bottom: 15px;">
+                                <div class="form-group" style="display: flex; align-items: center; gap: 8px; height: 100%;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin-bottom: 0; color: var(--text-main); font-size: 0.9rem;">
+                                        <input type="checkbox" id="render-show-title" style="accent-color: var(--primary-neon); cursor: pointer; width: 18px; height: 18px;">
+                                        <span>Mostrar Título e Intérprete al inicio</span>
+                                    </label>
+                                </div>
+                                <div class="form-group" style="display: flex; align-items: center; gap: 8px; height: 100%;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin-bottom: 0; color: var(--text-main); font-size: 0.9rem;">
+                                        <input type="checkbox" id="render-enable-fade" style="accent-color: var(--primary-neon); cursor: pointer; width: 18px; height: 18px;">
+                                        <span>Fundido de Entrada/Salida (Fade In/Out 3s)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row split-2" style="margin-bottom: 15px;">
+                                <div class="form-group">
+                                    <label for="render-watermark-preset" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; display: block;">Marca de Agua / Sticker</label>
+                                    <select id="render-watermark-preset" class="glass-select" onchange="toggleWatermarkCustomUpload()" style="width: 100%;">
+                                        <option value="none" selected>Ninguno</option>
+                                        <option value="youtube">YouTube (Suscribirse)</option>
+                                        <option value="tiktok">TikTok (Seguir)</option>
+                                        <option value="facebook">Facebook (Seguir)</option>
+                                        <option value="instagram">Instagram (Seguir)</option>
+                                        <option value="custom">Subir sticker personalizado...</option>
+                                    </select>
+                                    
+                                    <!-- Selector oculto para sticker propio -->
+                                    <div id="watermark-upload-box" style="display: none; margin-top: 10px;">
+                                        <input type="file" id="watermark-file-input" accept="image/png, image/jpeg" style="display: none;" onchange="handleWatermarkUpload(event)">
+                                        <button type="button" class="glass-button-mini" onclick="document.getElementById('watermark-file-input').click()" style="padding: 5px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                                            📁 Seleccionar PNG/JPG
+                                        </button>
+                                        <span id="watermark-file-name" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block; word-break: break-all;">Ningún archivo seleccionado</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row split-2" style="gap: 10px;">
+                                    <div class="form-group">
+                                        <label for="render-watermark-pos" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; display: block;">Posición</label>
+                                        <select id="render-watermark-pos" class="glass-select" style="width: 100%;">
+                                            <option value="top-right" selected>Arriba Derecha</option>
+                                            <option value="bottom-right">Abajo Derecha</option>
+                                            <option value="top-left">Arriba Izquierda</option>
+                                            <option value="bottom-left">Abajo Izquierda</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="render-watermark-dur" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; display: block;">Duración</label>
+                                        <select id="render-watermark-dur" class="glass-select" style="width: 100%;">
+                                            <option value="intro" selected>Primeros 15s</option>
+                                            <option value="full">Todo el video</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="render-outro-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; display: block;">Pantalla de Cierre (Outro) / Créditos / Disclaimer</label>
+                                <textarea id="render-outro-text" class="glass-input" rows="2" placeholder="Ej: Gracias por cantar. Suscríbete para más karaokes." style="width: 100%; resize: vertical; height: 55px; font-size: 0.85rem; padding: 8px 12px;"></textarea>
+                            </div>
+                        </div>
+
                         <div class="render-buttons-row">
                             <button class="glow-button secondary large-btn" onclick="startRender(true)">
                                 🎬 Renderizar Preview (30s)

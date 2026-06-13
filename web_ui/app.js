@@ -285,6 +285,36 @@ async function handleProjectChange(projectName) {
         
         updateFontPreview();
 
+        // Cargar opciones avanzadas de video
+        const renderShowTitle = document.getElementById('render-show-title');
+        if (renderShowTitle) renderShowTitle.checked = projectConfig.show_title || false;
+
+        const renderEnableFade = document.getElementById('render-enable-fade');
+        if (renderEnableFade) renderEnableFade.checked = projectConfig.enable_fade || false;
+
+        const renderWatermarkPreset = document.getElementById('render-watermark-preset');
+        if (renderWatermarkPreset) renderWatermarkPreset.value = projectConfig.watermark_preset || "none";
+
+        const renderWatermarkPos = document.getElementById('render-watermark-pos');
+        if (renderWatermarkPos) renderWatermarkPos.value = projectConfig.watermark_pos || "top-right";
+
+        const renderWatermarkDur = document.getElementById('render-watermark-dur');
+        if (renderWatermarkDur) renderWatermarkDur.value = projectConfig.watermark_dur || "intro";
+
+        const renderOutroText = document.getElementById('render-outro-text');
+        if (renderOutroText) renderOutroText.value = projectConfig.outro_text || "";
+
+        toggleWatermarkCustomUpload();
+
+        const watermarkFileName = document.getElementById('watermark-file-name');
+        if (watermarkFileName) {
+            if (projectConfig.watermark_custom_filename) {
+                watermarkFileName.innerText = `Cargado: ${projectConfig.watermark_custom_filename}`;
+            } else {
+                watermarkFileName.innerText = "Ningún archivo seleccionado";
+            }
+        }
+
         // Cargar miniaturas y mapa
         updateImagesGallery();
 
@@ -1786,6 +1816,13 @@ async function startRender(isPreview = false) {
     const font_size = document.getElementById('render-font-size').value;
     const style = document.getElementById('render-style').value;
 
+    const show_title = document.getElementById('render-show-title').checked;
+    const enable_fade = document.getElementById('render-enable-fade').checked;
+    const watermark_preset = document.getElementById('render-watermark-preset').value;
+    const watermark_pos = document.getElementById('render-watermark-pos').value;
+    const watermark_dur = document.getElementById('render-watermark-dur').value;
+    const outro_text = document.getElementById('render-outro-text').value.trim();
+
     try {
         const res = await fetch(`/api/run_assembler?project=${currentProject}`, {
             method: 'POST',
@@ -1795,7 +1832,13 @@ async function startRender(isPreview = false) {
                 resolution: resolution,
                 font_size: parseInt(font_size),
                 style: style,
-                mode: mode
+                mode: mode,
+                show_title: show_title,
+                enable_fade: enable_fade,
+                watermark_preset: watermark_preset,
+                watermark_pos: watermark_pos,
+                watermark_dur: watermark_dur,
+                outro_text: outro_text
             })
         });
         const data = await res.json();
@@ -3099,5 +3142,45 @@ async function selectPalette(pKey) {
         } catch (e) {
             console.error("Error al guardar paleta en config:", e);
         }
+    }
+}
+
+function toggleWatermarkCustomUpload() {
+    const preset = document.getElementById('render-watermark-preset').value;
+    const uploadBox = document.getElementById('watermark-upload-box');
+    if (uploadBox) {
+        uploadBox.style.display = (preset === 'custom') ? 'block' : 'none';
+    }
+}
+
+async function handleWatermarkUpload(event) {
+    if (!currentProject) return;
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('watermark', file);
+    
+    try {
+        const res = await fetch(`/api/upload_watermark?project=${currentProject}`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            showToast(data.error, "error");
+        } else {
+            showToast("Sticker/marca de agua subida con éxito", "success");
+            const watermarkFileName = document.getElementById('watermark-file-name');
+            if (watermarkFileName) {
+                watermarkFileName.innerText = `Cargado: ${file.name}`;
+            }
+            if (projectConfig) {
+                projectConfig.watermark_custom_filename = file.name;
+            }
+        }
+    } catch (e) {
+        showToast("Error al subir marca de agua", "error");
     }
 }

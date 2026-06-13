@@ -4,6 +4,42 @@ Registro cronológico de todos los cambios, características nuevas y correccion
 
 ---
 
+## [v2.2.0] — Intro, Outro, Marcas de Agua y Transiciones de Video
+
+---
+
+### 🆕 Funcionalidad 1 — Módulo de Mejoras de Video Modular (video_enhancements.py)
+
+**Archivos:** `video_enhancements.py` (nuevo)
+
+- **Diseño Limpio y Modular:** Creada una librería auxiliar independiente para evitar código espagueti en el compilador principal.
+- **Marcas de Agua Programáticas (Presets):** Generación automática en Pillow de calcomanías estéticas de redes sociales (`YouTube`, `TikTok`, `Instagram`, `Facebook`) si no existen previamente en `base_images/`.
+- **Composición Alpha (Watermarks):** Lógica robusta que abre, redimensiona proporcionalmente (~15% del ancho del video) y superpone la calcomanía en la esquina deseada (`top-left`, `bottom-left`, `top-right`, `bottom-right`) durante los primeros 15 segundos o todo el video.
+- **Outro Disclaimer / Créditos:** Función de ajuste de línea automático (word wrap) con panel negro semitransparente que se renderiza centrado cuando finalizan las letras del karaoke (fase instrumental final).
+
+---
+
+### 🆕 Funcionalidad 2 — Configuración Avanzada e Integración en Servidor Web
+
+**Archivos:** `karaoke_web_server.py`
+
+- **Persistencia en config.json:** Integración de propiedades de video (`show_title`, `enable_fade`, `watermark_preset`, `watermark_pos`, `watermark_dur`, `outro_text`) en la creación (`/api/init`) y renderizado (`/api/run_assembler`).
+- **Endpoint de Carga de Marcas de Agua:** Implementación de `POST /api/upload_watermark` para aceptar marcas de agua personalizadas en formato multipart, guardándolas como `watermark_custom.*` en la carpeta del proyecto.
+- **Paso de Parámetros CLI:** Mapeo de configuraciones a argumentos en la invocación de `karaoke_assembler.py`.
+
+---
+
+### 🆕 Funcionalidad 3 — Argumentos y Transiciones en Ensamblador y FFmpeg
+
+**Archivos:** `karaoke_assembler.py`
+
+- **Parser Extendido:** Añadidos argumentos CLI para marcas de agua (`--watermark`, `--watermark-pos`, `--watermark-dur`), outro (`--outro`) y fundidos (`--fade-effects`).
+- **Transiciones de Fundido en FFmpeg (Fade In/Out):**
+  - **Fondo de Imagen:** Inyección de filtros de video `scale,fade=in,fade=out` y de audio `afade=t=in,afade=t=out` en la llamada final de concatenación con FFmpeg.
+  - **Fondo de Video:** Inyección de los mismos filtros de fundido en la llamada de superposición (`-filter_complex`) y atenuación de audio en FFmpeg.
+
+---
+
 ## [v2.1.0] — Filtros, Creador de Paletas y Reubicación de Whisper
 
 ---
