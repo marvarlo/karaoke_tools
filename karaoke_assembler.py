@@ -625,18 +625,28 @@ def check_ffmpeg():
 
 
 def run_ffmpeg(filelist: Path, audio: str, output: str,
-               W: int, H: int, verbose: bool):
+               W: int, H: int, verbose: bool, fade_effects: bool = False, total_dur: float = 0.0):
+    vf_filter = f'scale={W}:{H}:flags=lanczos,format=yuv420p'
+    if fade_effects and total_dur > 0:
+        st_out = max(0.0, total_dur - 3.0)
+        vf_filter += f',fade=in:st=0:d=1,fade=out:st={st_out:.2f}:d=3'
+
     cmd = [
         'ffmpeg', '-y',
         '-f', 'concat', '-safe', '0', '-i', str(filelist),
         '-i', audio,
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
         '-c:a', 'aac', '-b:a', '192k',
-        '-vf', f'scale={W}:{H}:flags=lanczos,format=yuv420p',
+        '-vf', vf_filter,
         '-movflags', '+faststart',
-        '-shortest',
-        output
+        '-shortest'
     ]
+
+    if fade_effects and total_dur > 0:
+        st_out = max(0.0, total_dur - 3.0)
+        cmd += ['-af', f'afade=t=in:ss=0:d=1,afade=t=out:st={st_out:.2f}:d=3']
+
+    cmd.append(output)
     if verbose:
         subprocess.run(cmd, check=True)
     else:
@@ -695,6 +705,18 @@ def main():
                     help='Tipo de fondo: image o video')
     ap.add_argument('--video-bg',     default=None,
                     help='Lista de videos de fondo separados por comas')
+    ap.add_argument('--watermark',     default=None,
+                    help='Ruta de la marca de agua (sticker/imagen)')
+    ap.add_argument('--watermark-pos', default='top-right',
+                    choices=['top-left', 'bottom-left', 'top-right', 'bottom-right'],
+                    help='Posición de la marca de agua (default: top-right)')
+    ap.add_argument('--watermark-dur', default='intro',
+                    choices=['intro', 'full'],
+                    help='Duración de la marca de agua (default: intro)')
+    ap.add_argument('--outro',         default=None,
+                    help='Texto de cierre / Disclaimer / Créditos')
+    ap.add_argument('--fade-effects',  action='store_true',
+                    help='Aplicar efectos de fundido (Fade In/Out) al video y audio')
 
     args = ap.parse_args()
 
@@ -825,6 +847,16 @@ def main():
 
             frame = render_frame(state, bg, fmain, fside, W, H, args.title)
 
+            # Aplicar texto de cierre (outro) si existe y estamos en el outro
+            if args.outro:
+                from video_enhancements import apply_outro_text
+                frame = apply_outro_text(frame, args.outro, fside, W, H, state)
+
+            # Aplicar marca de agua si está definida
+            if args.watermark:
+                from video_enhancements import apply_watermark
+                frame = apply_watermark(frame, args.watermark, args.watermark_pos, args.watermark_dur, state.t_start, total_dur, W, H)
+
             fp = frames_path / f'f{i:05d}.png'
             frame.save(fp, compress_level=1)
 
@@ -917,19 +949,30 @@ def main():
             print(f"    Secuencia base de fondo: {seq_duration:.2f}s. Loops necesarios: {loop_count + 1}")
             print(f"🎬 Ensamblando video final con overlay transparente...")
             
+            filter_complex_final = '[0:v][1:v]overlay=0:0:shortest=1'
+            if args.fade_effects and total_dur > 0:
+                st_out = max(0.0, total_dur - 3.0)
+                filter_complex_final += f',fade=in:st=0:d=1,fade=out:st={st_out:.2f}:d=3'
+            filter_complex_final += '[outv]'
+
             final_cmd = [
                 'ffmpeg', '-y',
                 '-stream_loop', str(loop_count), '-i', str(temp_seq),
                 '-f', 'concat', '-safe', '0', '-i', str(fl_path),
                 '-i', args.audio,
-                '-filter_complex', '[0:v][1:v]overlay=0:0:shortest=1[outv]',
+                '-filter_complex', filter_complex_final,
                 '-map', '[outv]',
                 '-map', '2:a',
                 '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
                 '-c:a', 'aac', '-b:a', '192k',
-                '-shortest',
-                args.output
+                '-shortest'
             ]
+            
+            if args.fade_effects and total_dur > 0:
+                st_out = max(0.0, total_dur - 3.0)
+                final_cmd += ['-af', f'afade=t=in:ss=0:d=1,afade=t=out:st={st_out:.2f}:d=3']
+
+            final_cmd.append(args.output)
             
             if args.verbose:
                 subprocess.run(final_cmd, check=True)
@@ -949,12 +992,12 @@ def main():
             fp_dir    = Path(args.frames_dir)
             fl_path   = do_render(fp_dir)
             print(f"\n🎬  Ensamblando video...")
-            run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose)
+            run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose, fade_effects=args.fade_effects, total_dur=total_dur)
         else:
             with tempfile.TemporaryDirectory() as tmp:
                 fl_path = do_render(Path(tmp))
                 print(f"\n🎬  Ensamblando video con FFmpeg...")
-                run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose)
+                run_ffmpeg(fl_path, args.audio, args.output, W, H, args.verbose, fade_effects=args.fade_effects, total_dur=total_dur)
 
     # ── Resultado ─────────────────────────────────────────────────────────────
     out_path = Path(args.output)

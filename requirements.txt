@@ -18,3 +18,17 @@ librosa
 #
 # Step 2 — install the package itself without pulling diffq-fixed:
 #   pip install audio-separator --no-deps
+
+# Optional: MIDI transcription from stems using `basic-pitch`.
+# Note: as of this project snapshot, `basic-pitch` may require an older
+# `numpy` and a Python version < 3.14 to build successfully. If you need
+# to run `stem2Midi.py`, create a separate virtualenv using Python 3.10-3.12
+# and then install:
+#
+#   python -m venv .venv_bp
+#   .venv_bp\Scripts\activate
+#   pip install --upgrade pip
+#   pip install basic-pitch
+#
+# We don't pin `basic-pitch` here because it is optional and can conflict
+# with the main project's `numpy` version. Add it manually when needed.
