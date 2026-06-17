@@ -803,6 +803,11 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 "images_folder": "images",
                 "output_name": "karaoke.mp4",
                 "show_title": form.get('show_title') == 'true',
+                "enable_fade": form.get('enable_fade') == 'true',
+                "watermark_preset": form.get('watermark_preset', 'none'),
+                "watermark_pos": form.get('watermark_pos', 'top-right'),
+                "watermark_dur": form.get('watermark_dur', 'intro'),
+                "outro_text": form.get('outro_text', ''),
                 "gap_threshold": float(form.get('gap_threshold', 1.2))
             }
             # Computar output_name dinámicamente y guardarlo
@@ -905,6 +910,46 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
                 f.write(video_field['content'])
                 
             return self.send_json({"success": True, "filename": f"loop_videos/{clean_name}"})
+
+        # ── SUBIR MARCA DE AGUA (MULTIPART) ───────────────────────────────────
+        elif path == '/api/upload_watermark':
+            project_name = query.get('project', [''])[0]
+            if not project_name:
+                return self.send_error_json("Falta 'project'")
+                
+            form, files = parse_multipart_data(self.rfile, self.headers)
+            watermark_field = files.get('watermark')
+            
+            if not watermark_field or not watermark_field['content']:
+                return self.send_error_json("No se envió ninguna marca de agua")
+                
+            filename = watermark_field['filename']
+            # Asegurar extensión válida
+            ext = Path(filename).suffix.lower()
+            if ext not in {'.png', '.jpg', '.jpeg', '.webp'}:
+                return self.send_error_json("Formato de marca de agua no soportado (debe ser PNG, JPG, JPEG o WEBP)")
+                
+            # Limpiar nombre
+            clean_name = "watermark_custom" + ext
+            
+            project_path = WORKSPACE_DIR / project_name
+            project_path.mkdir(parents=True, exist_ok=True)
+            
+            dest = project_path / clean_name
+            with open(dest, 'wb') as f:
+                f.write(watermark_field['content'])
+                
+            # Actualizar config.json para reflejar el nombre de archivo personalizado
+            cfg_file = project_path / 'config.json'
+            if cfg_file.exists():
+                try:
+                    cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+                    cfg['watermark_custom_filename'] = filename
+                    cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+                except Exception as e:
+                    print(f"[WARNING] No se pudo guardar config.json tras subir marca de agua: {e}")
+
+            return self.send_json({"success": True, "filename": clean_name})
 
         # ── ELIMINAR IMAGEN ───────────────────────────────────────────────────
         elif path == '/api/delete_image':
@@ -1254,16 +1299,49 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
             mode = data.get('mode', cfg.get('mode', 'karaoke'))
             
-            # Persistir las opciones de renderizado elegidas por el usuario en config.json
+            # Recuperar y persistir las nuevas opciones avanzadas
+            show_title = data.get('show_title', cfg.get('show_title', False))
+            enable_fade = data.get('enable_fade', cfg.get('enable_fade', False))
+            watermark_preset = data.get('watermark_preset', cfg.get('watermark_preset', 'none'))
+            watermark_pos = data.get('watermark_pos', cfg.get('watermark_pos', 'top-right'))
+            watermark_dur = data.get('watermark_dur', cfg.get('watermark_dur', 'intro'))
+            outro_text = data.get('outro_text', cfg.get('outro_text', ''))
+
             cfg['mode'] = mode
             cfg['style'] = style
             cfg['resolution'] = resolution
             cfg['font_size'] = font_size
+            cfg['show_title'] = show_title
+            cfg['enable_fade'] = enable_fade
+            cfg['watermark_preset'] = watermark_preset
+            cfg['watermark_pos'] = watermark_pos
+            cfg['watermark_dur'] = watermark_dur
+            cfg['outro_text'] = outro_text
             cfg['output_name'] = get_dynamic_output_name(cfg, project_name, preview=False, mode=mode)
+            
             try:
                 cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
             except Exception as e:
                 print(f"[WARNING] No se pudo guardar config.json al renderizar: {e}")
+
+            # Resolver ruta de marca de agua
+            watermark_path = None
+            if watermark_preset == 'custom':
+                for ext in ('.png', '.jpg', '.jpeg', '.webp'):
+                    test_path = project_path / f"watermark_custom{ext}"
+                    if test_path.exists():
+                        watermark_path = test_path
+                        break
+            elif watermark_preset in ('youtube', 'tiktok', 'instagram', 'facebook'):
+                preset_path = WORKSPACE_DIR / 'base_images' / f"preset_{watermark_preset}.png"
+                if not preset_path.exists():
+                    try:
+                        from video_enhancements import generate_preset_watermark
+                        generate_preset_watermark(watermark_preset, preset_path)
+                    except Exception as e:
+                        print(f"[WARNING] No se pudo generar preset {watermark_preset}: {e}")
+                if preset_path.exists():
+                    watermark_path = preset_path
                 
             audio_path = project_path / cfg.get('audio', 'audio.mp3')
             if mode == 'karaoke':
@@ -1306,8 +1384,28 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             if cfg.get('font'):
                 cmd += ['--font', str(cfg['font'])]
                 
-            if cfg.get('show_title') and cfg.get('title'):
-                cmd += ['--title', cfg['title']]
+            if cfg.get('show_title'):
+                title_val = cfg.get('title', '')
+                artist_val = cfg.get('artist', '')
+                full_title = f"{title_val} - {artist_val}" if artist_val else title_val
+                if full_title.strip():
+                    cmd += ['--title', full_title.strip()]
+
+            # Opciones de marca de agua
+            if watermark_path:
+                cmd += [
+                    '--watermark', str(watermark_path),
+                    '--watermark-pos', cfg.get('watermark_pos', 'top-right'),
+                    '--watermark-dur', cfg.get('watermark_dur', 'intro')
+                ]
+
+            # Opciones de disclaimer / outro
+            if cfg.get('outro_text'):
+                cmd += ['--outro', cfg['outro_text']]
+
+            # Transiciones de fundido
+            if cfg.get('enable_fade'):
+                cmd += ['--fade-effects']
 
             if cfg.get('background_type') == 'video':
                 cmd += ['--background-type', 'video']
