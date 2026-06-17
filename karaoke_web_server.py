@@ -932,7 +932,7 @@ class KaraokeHTTPHandler(BaseHTTPRequestHandler):
             # Limpiar nombre
             clean_name = "watermark_custom" + ext
             
-            project_path = PROJECTS_DIR / project_name
+            project_path = WORKSPACE_DIR / project_name
             project_path.mkdir(parents=True, exist_ok=True)
             
             dest = project_path / clean_name
