@@ -108,7 +108,9 @@ def images_in(folder: Path) -> list:
 
 def cmd_init(args):
     name   = args.name
-    folder = Path(name)
+    projects_dir = SCRIPT_DIR / 'projects'
+    projects_dir.mkdir(exist_ok=True)
+    folder = projects_dir / name
 
     if folder.exists():
         print(f"⚠️   La carpeta '{folder}' ya existe.")
