@@ -12,14 +12,16 @@ A local Python suite and 5-step interactive web wizard for creating synchronized
 - FFmpeg installed and on PATH
 - Dependencies: `pillow faster-whisper whisper-timestamped soundfile librosa`
 - Optional (audio separation): `audio-separator[gpu]`
+- Optional (fast installs): [uv](https://github.com/astral-sh/uv) package manager
 
 ## Running the Application
 
 ```powershell
-# Activate venv
-.venv\Scripts\Activate.ps1
+# With uv (no need to activate venv)
+uv run python karaoke_web_server.py --port 8080
 
-# Start the web wizard (recommended)
+# With pip (activate venv first)
+.venv\Scripts\Activate.ps1
 python karaoke_web_server.py --port 8080
 # Open http://localhost:8080
 ```
