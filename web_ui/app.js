@@ -2235,6 +2235,61 @@ async function saveLyricsData() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// IMPORTACIÓN DE ARCHIVOS SRT
+// ──────────────────────────────────────────────────────────────────────────────
+function importSrtFile() {
+    if (!currentProject) {
+        showToast("Selecciona un proyecto primero", "error");
+        return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.srt';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const srtText = await file.text();
+            showToast("Importando subtítulos SRT...", "warning");
+
+            const res = await fetch('/api/import_srt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project: currentProject,
+                    srt_text: srtText
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                showToast(data.error, "error");
+                return;
+            }
+
+            if (!data.segments || data.segments.length === 0) {
+                showToast("No se encontraron subtítulos en el archivo", "error");
+                return;
+            }
+
+            lyricsData = data;
+            renderLyricsEditor();
+
+            await saveLyricsData();
+
+            showToast(`SRT importado: ${data.total_segments} segmentos, ${data.total_words} palabras`);
+        } catch (err) {
+            console.error("Error al importar SRT:", err);
+            showToast("Error al leer el archivo SRT", "error");
+        }
+    };
+    input.click();
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // PARSEO DE METADATOS ID3v1/ID3v2 DE AUDIO (MP3)
 // ──────────────────────────────────────────────────────────────────────────────
 function extractMetadata(file) {
