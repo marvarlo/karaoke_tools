@@ -43,9 +43,16 @@ fi
 
 # ── Dependencias principales ──────────────────────────────────────────────────
 echo ""
+PY_MINOR=$("$PYTHON" -c "import sys; print(sys.version_info.minor)")
+if [ "$PY_MINOR" -ge 13 ]; then
+    REQ_FILE="$ROOT_DIR/requirements.3.14.txt"
+    echo "Python >= 3.13 detectado — usando $REQ_FILE"
+else
+    REQ_FILE="$ROOT_DIR/requirements.txt"
+fi
 echo "Instalando dependencias del pipeline principal..."
 pip install --upgrade pip -q
-pip install -r "$ROOT_DIR/requirements.txt"
+pip install -r "$REQ_FILE"
 
 # ── audio-separator (opcional) ────────────────────────────────────────────────
 echo ""
@@ -55,9 +62,20 @@ if [[ "$INSTALL_SEP" =~ ^[sS]$ ]]; then
     read -r -p "Usar GPU (NVIDIA CUDA)? [s/N]: " USE_GPU
 
     echo "Instalando dependencias de audio-separator..."
-    pip install audioop-lts beartype einops julius ml_collections numpy \
-        onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy \
-        rotary-embedding-torch samplerate scipy six soundfile torch tqdm
+    SEP_DEPS="beartype einops julius ml_collections numpy \
+        pydub pyyaml requests resampy \
+        rotary-embedding-torch samplerate scipy six soundfile torch tqdm"
+
+    PY_MAJOR=$("$PYTHON" -c "import sys; print(sys.version_info.major)")
+    PY_MINOR=$("$PYTHON" -c "import sys; print(sys.version_info.minor)")
+
+    if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 13 ]; then
+        SEP_DEPS="$SEP_DEPS audioop-lts onnx2torch-py313"
+    else
+        SEP_DEPS="$SEP_DEPS onnx2torch"
+    fi
+
+    pip install $SEP_DEPS
 
     if [[ "$USE_GPU" =~ ^[sS]$ ]]; then
         pip install "audio-separator[gpu]" --no-deps
