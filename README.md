@@ -30,9 +30,12 @@ Una suite completa de herramientas locales en Python y una interfaz web moderna 
 ```text
 karaoke_tools/
 ├── install/                      # Scripts de instalación
-│   ├── install.sh                #   Linux / macOS / Git Bash
-│   ├── install.bat               #   CMD de Windows
-│   └── install.ps1               #   PowerShell de Windows
+│   ├── install.sh                #   Linux / macOS / Git Bash (pip)
+│   ├── install.bat               #   CMD de Windows (pip)
+│   ├── install.ps1               #   PowerShell de Windows (pip)
+│   ├── install_uv.sh             #   Linux / macOS / Git Bash (uv)
+│   ├── install_uv.bat            #   CMD de Windows (uv)
+│   └── install_uv.ps1            #   PowerShell de Windows (uv)
 ├── projects/                     # Proyectos de canciones (generado en runtime)
 │   └── <NombreProyecto>/         #   Una carpeta por canción
 │       ├── config.json           #     Configuración del proyecto
@@ -75,27 +78,39 @@ karaoke_tools/
 
 ### Instalación de dependencias
 
-#### Python 3.10–3.12
+#### Opción rápida: uv (recomendado)
+
+[uv](https://github.com/astral-sh/uv) es un gestor de paquetes 10-100x más rápido que `pip`. Instala Python, crea el venv y resuelve dependencias todo en uno:
 
 ```bash
 # Linux / macOS / Git Bash
+bash install/install_uv.sh
+
+# Windows PowerShell
+.\install\install_uv.ps1
+
+# Windows CMD
+install\install_uv.bat
+```
+
+> Los scripts `install_uv.*` detectan uv y lo instalan automáticamente si no está presente. No necesitas crear el venv manualmente.
+
+#### Opción clásica: pip
+
+```bash
+# Linux / macOS / Git Bash
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 # Windows PowerShell
+python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-#### Python 3.13+
-
 ```bash
-# Linux / macOS / Git Bash
-source .venv/bin/activate
-pip install -r requirements.3.14.txt
-
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
+# Python 3.13+ (usa el requirements especializado)
 pip install -r requirements.3.14.txt
 ```
 
@@ -131,6 +146,10 @@ pip install audio-separator --no-deps
 El método más sencillo y visual es ejecutar el servidor web local:
 
 ```powershell
+# Con uv (sin necesidad de activar el venv)
+uv run python karaoke_web_server.py --port 8080
+
+# Con pip (activar venv primero)
 python karaoke_web_server.py --port 8080
 ```
 Abre tu navegador e ingresa a: **[http://localhost:8080](http://localhost:8080)**
