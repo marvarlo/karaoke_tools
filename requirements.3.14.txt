@@ -1,0 +1,47 @@
+# ── requirements.3.14.txt ─────────────────────────────────────────────────────
+# Para Python 3.14+. Incluye audio-separator y todas sus dependencias,
+# incluyendo audioop-lts (requerido porque audioop fue removido del stdlib).
+#
+# Uso:
+#   python -m venv .venv
+#   source .venv/bin/activate          # Linux / macOS
+#   .venv\Scripts\activate             # Windows
+#   pip install -r requirements.3.14.txt
+#
+# NOTA: En Python 3.10–3.12 usa requirements.txt en su lugar.
+
+# ── Core pipeline ─────────────────────────────────────────────────────────────
+Pillow>=10.0
+openai-whisper
+soundfile>=0.12
+librosa>=0.10
+
+# ── Audio separation — Python 3.14+ ──────────────────────────────────────────
+# audioop-lts: backport de audioop (removido en Python 3.13+)
+# onnx2torch-py313: fork de onnx2torch compatible con Python 3.13+
+audioop-lts
+beartype>=0.18.5,<0.19.0
+einops>=0.7
+julius>=0.2
+ml_collections
+numpy>=2
+onnx-weekly
+onnx2torch-py313>=1.6
+pydub>=0.25
+pyyaml
+requests>=2
+resampy>=0.4
+rotary-embedding-torch>=0.6.1,<0.7.0
+samplerate==0.1.0
+scipy>=1.13.0,<2.0.0
+six>=1.16
+soundfile>=0.12
+torch>=2.3
+tqdm
+
+# ── Audio separator (sin dependencias problemáticas) ─────────────────────────
+# diffq>=0.2 falla al compilar en Windows (falta bitpack.pyx).
+# Se instala con --no-deps y las dependencias reales se listan arriba.
+# Para instalar manualmente:
+#   pip install audio-separator --no-deps
+audio-separator>=0.44.0

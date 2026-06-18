@@ -1,10 +1,8 @@
 # ── Core pipeline (karaoke_timing.py + karaoke_assembler.py) ──────────────────
-Pillow
+Pillow>=10.0
 openai-whisper
-faster-whisper
-whisper-timestamped
-soundfile
-librosa
+soundfile>=0.12
+librosa>=0.10
 
 # ── Audio separation (karaoke_separator.py) ───────────────────────────────────
 # audio-separator pulls diffq-fixed, which fails to build on Windows (missing
@@ -12,8 +10,8 @@ librosa
 # then install audio-separator with --no-deps to skip the broken one.
 #
 # Step 1 — real dependencies (audio-separator 0.44.2):
-#   pip install audioop-lts beartype einops julius ml_collections numpy \
-#       onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy \
+#   pip install beartype einops julius ml_collections numpy \
+#       onnx2torch pydub pyyaml requests resampy \
 #       rotary-embedding-torch samplerate scipy six soundfile torch tqdm
 #
 # Step 2 — install the package itself without pulling diffq-fixed:
