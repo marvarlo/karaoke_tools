@@ -58,7 +58,8 @@ karaoke_tools/
 ├── karaoke_timing.py             # Transcripción Whisper por palabras
 ├── karaoke_separator.py          # Separación vocal/instrumental con RoFormer
 ├── karaoke_maker.py              # Orquestador CLI (init/build/preview/info/clean)
-├── requirements.txt              # Dependencias del pipeline principal
+├── requirements.txt              # Dependencias del pipeline principal (Python 3.10–3.12)
+├── requirements.3.14.txt         # Incluye audio-separator para Python 3.13+
 ├── .gitignore
 └── README.md
 ```
@@ -74,45 +75,53 @@ karaoke_tools/
 
 ### Instalación de dependencias
 
-``` powershell
-# Activar entorno virtual (Windows)
-venv\Scripts\Activate.ps1
+#### Python 3.10–3.12
 
-# Instalar dependencias del pipeline principal
-install\install.ps1
+```bash
+# Linux / macOS / Git Bash
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-``` bash
-# Activar entorno virtual (Linux / macOS / Git Bash)
-source venv/bin/activate
+#### Python 3.13+
 
-# Instalar dependencias del pipeline principal
-install/install.sh
+```bash
+# Linux / macOS / Git Bash
+source .venv/bin/activate
+pip install -r requirements.3.14.txt
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+pip install -r requirements.3.14.txt
 ```
 
-``` CMD (Windows Command Prompt)
-# Activar entorno virtual CMD Windows Command Prompt
-venv\Scripts\Activate.bat
+> `requirements.txt` contiene solo las dependencias del pipeline principal (sin audio-separator). `requirements.3.14.txt` incluye audio-separator y todas sus dependencias, con los paquetes necesarios para Python 3.14+ (`audioop-lts`, `onnx2torch-py313`).
 
-# Instalar dependencias del pipeline principal
-install/install.bat
-```
+#### Separador de audio (opcional, Python 3.10–3.12)
 
-#### Separador de audio (opcional)
+`audio-separator` **no está incluido en `requirements.txt`** porque tiene una dependencia transitiva (`diffq-fixed`) que falla al compilar en Windows. Los scripts de instalación (`install.sh`, `install.bat`, `install.ps1`) lo manejan automáticamente, pero también puedes instalarlo manualmente:
 
-`audio-separator` **no está incluido en `requirements.txt`** porque tiene una dependencia transitiva (`diffq-fixed`) que falla al compilar en Windows. Instálalo por separado usando `--no-deps`:
-
-```powershell
-# Paso 1 — instalar todas las dependencias reales (excepto la problemática)
-pip install audioop-lts beartype einops julius ml_collections numpy `
-    onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy `
+```bash
+# Linux / macOS / Git Bash
+pip install beartype einops julius ml_collections numpy \
+    onnx2torch pydub pyyaml requests resampy \
     rotary-embedding-torch samplerate scipy six soundfile torch tqdm
-
-# Paso 2 — instalar audio-separator sin dependencias (omite diffq-fixed)
 pip install audio-separator --no-deps
 ```
 
-> **¿Por qué `--no-deps`?** `diffq-fixed==0.2.4` es la única dependencia declarada que falla: intenta compilar extensiones Cython desde fuente pero su paquete no incluye el archivo `bitpack.pyx`. Instalando las demás dependencias manualmente en el Paso 1 y usando `--no-deps` en el Paso 2 se evita el problema por completo.
+```powershell
+# Windows PowerShell
+pip install beartype einops julius ml_collections numpy `
+    onnx2torch pydub pyyaml requests resampy `
+    rotary-embedding-torch samplerate scipy six soundfile torch tqdm
+pip install audio-separator --no-deps
+```
+
+> **¿Por qué `--no-deps`?** `diffq-fixed==0.2.4` es la única dependencia declarada que falla: intenta compilar extensiones Cython desde fuente pero su paquete no incluye el archivo `bitpack.pyx`. Instalando las demás dependencias manualmente y usando `--no-deps` se evita el problema por completo.
 
 ---
 

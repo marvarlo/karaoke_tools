@@ -46,9 +46,16 @@ if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
 
 # ── Dependencias principales ──────────────────────────────────────────────────
 Write-Host ""
+$pyMinor = & python -c "import sys; print(sys.version_info.minor)"
+if ([int]$pyMinor -ge 13) {
+    $reqFile = Join-Path $RootDir "requirements.3.14.txt"
+    Write-Host "Python >= 3.13 detectado — usando requirements.3.14.txt"
+} else {
+    $reqFile = Join-Path $RootDir "requirements.txt"
+}
 Write-Host "Instalando dependencias del pipeline principal..."
 python -m pip install --upgrade pip -q
-python -m pip install -r "$RootDir\requirements.txt"
+python -m pip install -r "$reqFile"
 
 # ── audio-separator (opcional) ────────────────────────────────────────────────
 Write-Host ""
@@ -58,10 +65,18 @@ if ($installSep -match '^[sS]$') {
     $useGpu = Read-Host "Usar GPU (NVIDIA CUDA)? [s/N]"
 
     Write-Host "Instalando dependencias de audio-separator..."
-    python -m pip install `
-        audioop-lts beartype einops julius ml_collections numpy `
-        onnx-weekly onnx2torch-py313 pydub pyyaml requests resampy `
-        rotary-embedding-torch samplerate scipy six soundfile torch tqdm
+    $sepDeps = @(
+        "beartype", "einops", "julius", "ml_collections", "numpy",
+        "pydub", "pyyaml", "requests", "resampy",
+        "rotary-embedding-torch", "samplerate", "scipy", "six",
+        "soundfile", "torch", "tqdm"
+    )
+    if ([int]$pyMinor -ge 13) {
+        $sepDeps += @("audioop-lts", "onnx2torch-py313")
+    } else {
+        $sepDeps += "onnx2torch"
+    }
+    python -m pip install $sepDeps
 
     if ($useGpu -match '^[sS]$') {
         python -m pip install "audio-separator[gpu]" --no-deps
